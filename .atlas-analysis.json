@@ -1,0 +1,205 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "Drift Protocol v2",
+  "projectDescription": "On-chain perpetuals DEX with multiple liquidity mechanisms on Solana",
+  "theme": "aspen",
+  "primaryColor": "#8A2BE2",
+  "lightColor": "#9D4EED",
+  "darkColor": "#7B1FD1",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/overview",
+              "concepts/markets",
+              "concepts/positions",
+              "concepts/orders",
+              "concepts/margin",
+              "concepts/liquidations",
+              "concepts/oracles"
+            ]
+          },
+          {
+            "group": "SDK Guides",
+            "pages": [
+              "guides/initialization",
+              "guides/account-management",
+              "guides/placing-orders",
+              "guides/managing-positions",
+              "guides/account-subscriptions",
+              "guides/oracle-integration",
+              "guides/advanced-features"
+            ]
+          },
+          {
+            "group": "Math & Calculations",
+            "pages": [
+              "math/precision",
+              "math/amm",
+              "math/margin-calculations",
+              "math/pnl",
+              "math/funding-rates"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core Classes",
+            "pages": [
+              "api/drift-client",
+              "api/user",
+              "api/admin-client"
+            ]
+          },
+          {
+            "group": "Account Subscribers",
+            "pages": [
+              "api/account-subscribers/overview",
+              "api/account-subscribers/websocket",
+              "api/account-subscribers/polling",
+              "api/account-subscribers/grpc"
+            ]
+          },
+          {
+            "group": "Market Data",
+            "pages": [
+              "api/markets/perp-markets",
+              "api/markets/spot-markets",
+              "api/markets/oracles"
+            ]
+          },
+          {
+            "group": "Trading",
+            "pages": [
+              "api/trading/order-params",
+              "api/trading/position-management",
+              "api/trading/dlob"
+            ]
+          },
+          {
+            "group": "Math Utilities",
+            "pages": [
+              "api/math/conversion",
+              "api/math/position",
+              "api/math/margin",
+              "api/math/liquidation"
+            ]
+          },
+          {
+            "group": "Types",
+            "pages": [
+              "api/types/accounts",
+              "api/types/orders",
+              "api/types/positions",
+              "api/types/enums"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Program",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "program/architecture",
+              "program/security"
+            ]
+          },
+          {
+            "group": "Instructions",
+            "pages": [
+              "program/instructions/user",
+              "program/instructions/trading",
+              "program/instructions/admin",
+              "program/instructions/keeper"
+            ]
+          },
+          {
+            "group": "State",
+            "pages": [
+              "program/state/user-account",
+              "program/state/market-accounts",
+              "program/state/state-account"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Examples",
+        "groups": [
+          {
+            "group": "Basic Examples",
+            "pages": [
+              "examples/connect-and-deposit",
+              "examples/place-market-order",
+              "examples/place-limit-order",
+              "examples/modify-order",
+              "examples/cancel-order"
+            ]
+          },
+          {
+            "group": "Advanced Examples",
+            "pages": [
+              "examples/market-making",
+              "examples/liquidation-bot",
+              "examples/arbitrage",
+              "examples/event-listening"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Perpetual futures trading on Solana",
+    "Multiple liquidity mechanisms (AMM, DLOB)",
+    "Cross-margin and isolated margin modes",
+    "Oracle integrations (Pyth, Switchboard)",
+    "Real-time account subscriptions (WebSocket, gRPC)",
+    "Comprehensive math utilities for DeFi",
+    "Liquidation engine",
+    "Advanced order types",
+    "TypeScript and Rust SDK"
+  ],
+  "publicApiSurface": [
+    "DriftClient",
+    "User",
+    "AdminClient",
+    "BulkAccountLoader",
+    "WebSocketAccountSubscriber",
+    "PollingAccountSubscriber",
+    "GrpcAccountSubscriber",
+    "placePerpOrder",
+    "placeSpotOrder",
+    "cancelOrder",
+    "modifyOrder",
+    "deposit",
+    "withdraw",
+    "getPerpMarketAccount",
+    "getSpotMarketAccount",
+    "getUserAccount",
+    "calculatePosition",
+    "calculateMargin",
+    "calculateLiquidation",
+    "convertToNumber",
+    "BASE_PRECISION",
+    "QUOTE_PRECISION",
+    "PRICE_PRECISION"
+  ]
+}
