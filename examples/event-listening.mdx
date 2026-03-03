@@ -152,7 +152,7 @@ eventSubscriber.eventEmitter.on('newEvent', (event: WrappedEvent) => {
 ### User Account Updates
 
 ```typescript
-import { User } from '@drift-labs/sdk';
+import { User, positionIsAvailable, OrderStatus } from '@drift-labs/sdk';
 
 const user = new User({
   driftClient,

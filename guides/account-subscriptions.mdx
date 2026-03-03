@@ -303,6 +303,8 @@ All subscription types emit events that you can listen to:
 ### User Account Updates
 
 ```typescript
+import { positionIsAvailable, OrderStatus } from '@drift-labs/sdk';
+
 user.eventEmitter.on('userAccountUpdate', (userAccount) => {
   // User account changed
   console.log('Authority:', userAccount.authority.toBase58());

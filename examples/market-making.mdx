@@ -125,9 +125,9 @@ class SimpleMarketMaker {
 
 // Run the market maker
 async function main() {
-  // Initialize DriftClient and User
-  const driftClient = await initializeDriftClient();
-  const user = await initializeUser(driftClient);
+  // Initialize DriftClient and User (see guides/initialization for setup)
+  const driftClient = /* initialize your DriftClient */ ;
+  const user = /* initialize your User */ ;
 
   // Create market maker for SOL-PERP
   const marketMaker = new SimpleMarketMaker(

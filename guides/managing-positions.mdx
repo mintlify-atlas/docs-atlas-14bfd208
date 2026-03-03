@@ -10,7 +10,12 @@ Drift supports both perpetual and spot positions. This guide covers how to acces
 ### Perpetual Positions
 
 ```typescript
-import { User, MarketType } from '@drift-labs/sdk';
+import {
+  User,
+  MarketType,
+  positionIsAvailable,
+  calculateEntryPrice,
+} from '@drift-labs/sdk';
 
 // Get position for a specific market
 const solPerpPosition = user.getPerpPosition(0); // SOL-PERP

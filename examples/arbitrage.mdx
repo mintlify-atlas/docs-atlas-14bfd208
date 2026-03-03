@@ -115,7 +115,8 @@ class AmmOracleArbitrage {
 
 // Run the arbitrage bot
 async function main() {
-  const driftClient = await initializeDriftClient();
+  // Initialize DriftClient (see guides/initialization for setup)
+  const driftClient = /* initialize your DriftClient */ ;
 
   const arbBot = new AmmOracleArbitrage(
     driftClient,

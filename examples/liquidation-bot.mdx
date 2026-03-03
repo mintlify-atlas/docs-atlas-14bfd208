@@ -21,6 +21,7 @@ import {
   BulkAccountLoader,
   User,
   MarketType,
+  SpotBalanceType,
   convertToNumber,
   QUOTE_PRECISION,
   BN,
@@ -154,7 +155,8 @@ class LiquidationBot {
 
 // Run the bot
 async function main() {
-  const driftClient = await initializeDriftClient();
+  // Initialize DriftClient (see guides/initialization for setup)
+  const driftClient = /* initialize your DriftClient */ ;
   
   const bot = new LiquidationBot(driftClient);
   await bot.run();
