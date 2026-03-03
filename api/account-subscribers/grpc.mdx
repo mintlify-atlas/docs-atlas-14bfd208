@@ -1,0 +1,558 @@
+---
+title: gRPC Subscribers
+description: High-performance account streaming using gRPC protocols
+---
+
+gRPC subscribers provide the lowest latency and highest throughput for account updates using Yellowstone or Laser gRPC streaming infrastructure. They are ideal for high-frequency trading and applications requiring maximum performance.
+
+## Overview
+
+gRPC subscribers extend WebSocket subscribers with gRPC streaming capabilities:
+
+- **Yellowstone gRPC** - Geyser plugin-based streaming
+- **Laser gRPC** - High-performance streaming service
+- Lower latency than WebSocket subscriptions
+- Higher throughput than polling
+- Requires dedicated gRPC infrastructure
+
+## GrpcConfigs
+
+Configuration for gRPC connections.
+
+### Yellowstone Configuration
+
+```typescript
+type YellowstoneGrpcConfigs = {
+  client?: 'yellowstone';
+  endpoint: string;
+  token: string;
+  commitmentLevel?: CommitmentLevel;
+  enableReconnect?: boolean;
+  channelOptions?: ConstructorParameters<typeof Client>[2];
+};
+```
+
+<ParamField path="client" type="'yellowstone'">
+  Client type (defaults to yellowstone if not specified)
+</ParamField>
+
+<ParamField path="endpoint" type="string" required>
+  gRPC endpoint URL (e.g., 'https://grpc.example.com:443')
+</ParamField>
+
+<ParamField path="token" type="string" required>
+  Authentication token for the gRPC service
+</ParamField>
+
+<ParamField path="commitmentLevel" type="CommitmentLevel">
+  Commitment level for updates (PROCESSED, CONFIRMED, or FINALIZED)
+</ParamField>
+
+<ParamField path="enableReconnect" type="boolean" default="false">
+  Whether to enable automatic reconnection on connection loss
+</ParamField>
+
+<ParamField path="channelOptions" type="object">
+  gRPC channel options for advanced configuration
+</ParamField>
+
+### Laser Configuration
+
+```typescript
+type LaserGrpcConfigs = {
+  client: 'laser';
+  endpoint: string;
+  token: string;
+  commitmentLevel?: CommitmentLevel;
+  enableReconnect?: boolean;
+  channelOptions?: LaserstreamConfig['channelOptions'];
+};
+```
+
+<ParamField path="client" type="'laser'" required>
+  Must be 'laser' for Laser gRPC client
+</ParamField>
+
+### Example Configurations
+
+```typescript
+// Yellowstone configuration
+const yellowstoneConfig: GrpcConfigs = {
+  client: 'yellowstone',
+  endpoint: 'https://grpc.mainnet.yellowstone.com:443',
+  token: 'your-auth-token',
+  commitmentLevel: CommitmentLevel.CONFIRMED,
+  enableReconnect: true,
+};
+
+// Laser configuration
+const laserConfig: GrpcConfigs = {
+  client: 'laser',
+  endpoint: 'https://laser.drift.com:443',
+  token: 'your-auth-token',
+  commitmentLevel: CommitmentLevel.CONFIRMED,
+  enableReconnect: true,
+};
+```
+
+## grpcUserAccountSubscriber
+
+Subscribe to user account updates via gRPC.
+
+### Constructor
+
+```typescript
+new grpcUserAccountSubscriber(
+  grpcConfigs: GrpcConfigs,
+  program: Program,
+  userAccountPublicKey: PublicKey,
+  resubOpts?: ResubOpts
+)
+```
+
+<ParamField path="grpcConfigs" type="GrpcConfigs" required>
+  gRPC connection configuration
+</ParamField>
+
+<ParamField path="program" type="Program" required>
+  Anchor program instance for the Drift protocol
+</ParamField>
+
+<ParamField path="userAccountPublicKey" type="PublicKey" required>
+  Public key of the user account to subscribe to
+</ParamField>
+
+<ParamField path="resubOpts" type="ResubOpts">
+  Options for automatic resubscription
+</ParamField>
+
+### Example Usage
+
+```typescript
+import { 
+  grpcUserAccountSubscriber,
+  CommitmentLevel 
+} from '@drift-labs/sdk';
+import { Program } from '@coral-xyz/anchor';
+import { PublicKey } from '@solana/web3.js';
+
+// Configure gRPC connection
+const grpcConfig = {
+  endpoint: 'https://grpc.mainnet.drift.com:443',
+  token: 'your-auth-token',
+  commitmentLevel: CommitmentLevel.CONFIRMED,
+  enableReconnect: true,
+};
+
+// Create gRPC subscriber
+const userPubkey = new PublicKey('...');
+const subscriber = new grpcUserAccountSubscriber(
+  grpcConfig,
+  program,
+  userPubkey,
+  {
+    resubTimeoutMs: 30_000,
+    logResubMessages: true,
+  }
+);
+
+// Listen for updates
+subscriber.eventEmitter.on('userAccountUpdate', (userAccount) => {
+  console.log('User account updated via gRPC:', userAccount);
+  console.log('Total positions:', userAccount.perpPositions.length);
+});
+
+subscriber.eventEmitter.on('error', (error) => {
+  console.error('gRPC subscription error:', error);
+});
+
+// Subscribe
+await subscriber.subscribe();
+
+// Get current data
+const { data: userAccount, slot } = subscriber.getUserAccountAndSlot();
+console.log('Current user account at slot', slot);
+
+// Cleanup
+await subscriber.unsubscribe();
+```
+
+## grpcDriftClientAccountSubscriber
+
+Subscribe to Drift protocol accounts (state, markets, oracles) via gRPC.
+
+### Constructor
+
+```typescript
+new grpcDriftClientAccountSubscriber(
+  grpcConfigs: GrpcConfigs,
+  program: Program,
+  perpMarketIndexes: number[],
+  spotMarketIndexes: number[],
+  oracleInfos: OracleInfo[],
+  shouldFindAllMarketsAndOracles: boolean,
+  delistedMarketSetting: DelistedMarketSetting,
+  resubOpts?: ResubOpts
+)
+```
+
+<ParamField path="grpcConfigs" type="GrpcConfigs" required>
+  gRPC connection configuration
+</ParamField>
+
+<ParamField path="program" type="Program" required>
+  Anchor program instance for the Drift protocol
+</ParamField>
+
+<ParamField path="perpMarketIndexes" type="number[]" required>
+  Array of perpetual market indexes to subscribe to
+</ParamField>
+
+<ParamField path="spotMarketIndexes" type="number[]" required>
+  Array of spot market indexes to subscribe to
+</ParamField>
+
+<ParamField path="oracleInfos" type="OracleInfo[]" required>
+  Array of oracle information to subscribe to
+</ParamField>
+
+<ParamField path="shouldFindAllMarketsAndOracles" type="boolean" required>
+  Whether to automatically discover and subscribe to all markets
+</ParamField>
+
+<ParamField path="delistedMarketSetting" type="DelistedMarketSetting" required>
+  How to handle delisted markets
+</ParamField>
+
+<ParamField path="resubOpts" type="ResubOpts">
+  Options for automatic resubscription
+</ParamField>
+
+### Example Usage
+
+```typescript
+import { 
+  grpcDriftClientAccountSubscriber,
+  DelistedMarketSetting,
+  CommitmentLevel 
+} from '@drift-labs/sdk';
+
+// Configure gRPC connection
+const grpcConfig = {
+  client: 'yellowstone' as const,
+  endpoint: 'https://grpc.mainnet.yellowstone.com:443',
+  token: 'your-auth-token',
+  commitmentLevel: CommitmentLevel.CONFIRMED,
+  enableReconnect: true,
+};
+
+// Create gRPC subscriber for all markets
+const driftSubscriber = new grpcDriftClientAccountSubscriber(
+  grpcConfig,
+  program,
+  [], // perpMarketIndexes - will be auto-discovered
+  [], // spotMarketIndexes - will be auto-discovered
+  [], // oracleInfos - will be auto-discovered
+  true, // shouldFindAllMarketsAndOracles
+  DelistedMarketSetting.Discard,
+  {
+    resubTimeoutMs: 30_000,
+    logResubMessages: true,
+  }
+);
+
+// Listen for events
+driftSubscriber.eventEmitter.on('stateAccountUpdate', (state) => {
+  console.log('State updated via gRPC:', state);
+});
+
+driftSubscriber.eventEmitter.on('perpMarketAccountUpdate', (market) => {
+  console.log('Perp market updated:', market.marketIndex);
+  console.log('Market price:', market.amm.historicalOracleData.lastOraclePrice);
+});
+
+driftSubscriber.eventEmitter.on('spotMarketAccountUpdate', (market) => {
+  console.log('Spot market updated:', market.marketIndex);
+});
+
+driftSubscriber.eventEmitter.on('oraclePriceUpdate', (pubkey, source, data) => {
+  console.log('Oracle update via gRPC:', {
+    price: data.price.toString(),
+    slot: data.slot.toString(),
+    confidence: data.confidence.toString(),
+  });
+});
+
+// Subscribe to all accounts
+await driftSubscriber.subscribe();
+
+// Get state account
+const { data: state } = driftSubscriber.getStateAccountAndSlot();
+console.log('Exchange status:', state.exchangeStatus);
+
+// Get specific market
+const solPerpMarket = driftSubscriber.getMarketAccountAndSlot(0);
+if (solPerpMarket) {
+  console.log('SOL-PERP funding rate:', solPerpMarket.data.amm.lastFundingRate);
+}
+
+// Dynamically add a market
+await driftSubscriber.addPerpMarket(5);
+
+// Cleanup
+await driftSubscriber.unsubscribe();
+```
+
+## grpcAccountSubscriber
+
+Generic gRPC account subscriber for any account type.
+
+### Creating a Subscriber
+
+```typescript
+const subscriber = await grpcAccountSubscriber.create<AccountType>(
+  grpcConfigs: GrpcConfigs,
+  accountName: string,
+  program: Program,
+  accountPublicKey: PublicKey,
+  decodeBuffer?: (buffer: Buffer) => AccountType,
+  resubOpts?: ResubOpts,
+  clientProp?: Client
+)
+```
+
+<ParamField path="grpcConfigs" type="GrpcConfigs" required>
+  gRPC connection configuration
+</ParamField>
+
+<ParamField path="accountName" type="string" required>
+  Name of the account type (e.g., 'state', 'market')
+</ParamField>
+
+<ParamField path="program" type="Program" required>
+  Anchor program instance
+</ParamField>
+
+<ParamField path="accountPublicKey" type="PublicKey" required>
+  Public key of the account to subscribe to
+</ParamField>
+
+<ParamField path="decodeBuffer" type="(buffer: Buffer) => AccountType">
+  Optional custom buffer decoder function
+</ParamField>
+
+<ParamField path="resubOpts" type="ResubOpts">
+  Options for automatic resubscription
+</ParamField>
+
+<ParamField path="clientProp" type="Client">
+  Optional pre-configured gRPC client to reuse
+</ParamField>
+
+### Example Usage
+
+```typescript
+import { grpcAccountSubscriber } from '@drift-labs/sdk';
+import { PublicKey } from '@solana/web3.js';
+
+// Create gRPC subscriber for state account
+const statePublicKey = await getDriftStateAccountPublicKey(program.programId);
+
+const stateSubscriber = await grpcAccountSubscriber.create<StateAccount>(
+  {
+    endpoint: 'https://grpc.mainnet.drift.com:443',
+    token: 'your-auth-token',
+    commitmentLevel: CommitmentLevel.CONFIRMED,
+  },
+  'state',
+  program,
+  statePublicKey
+);
+
+// Subscribe with callback
+await stateSubscriber.subscribe((state: StateAccount) => {
+  console.log('State account updated:', state);
+  console.log('Exchange paused:', state.exchangePaused);
+});
+
+// Get current data
+const { data: state, slot } = stateSubscriber.dataAndSlot;
+console.log('State at slot', slot, ':', state);
+
+// Cleanup
+await stateSubscriber.unsubscribe();
+```
+
+## Other gRPC Subscribers
+
+The SDK provides gRPC subscribers for various account types:
+
+### grpcUserStatsAccountSubscriber
+
+```typescript
+import { grpcUserStatsAccountSubscriber } from '@drift-labs/sdk';
+
+const statsSubscriber = new grpcUserStatsAccountSubscriber(
+  grpcConfig,
+  program,
+  userStatsPublicKey
+);
+
+await statsSubscriber.subscribe();
+```
+
+### grpcInsuranceFundStakeAccountSubscriber
+
+```typescript
+import { grpcInsuranceFundStakeAccountSubscriber } from '@drift-labs/sdk';
+
+const stakeSubscriber = new grpcInsuranceFundStakeAccountSubscriber(
+  grpcConfig,
+  program,
+  stakeAccountPublicKey
+);
+
+await stakeSubscriber.subscribe();
+```
+
+## Performance Characteristics
+
+### Latency Comparison
+
+| Method | Typical Latency | Use Case |
+|--------|----------------|----------|
+| gRPC | 10-50ms | High-frequency trading |
+| WebSocket | 50-200ms | Real-time applications |
+| Polling | 500-5000ms | Background monitoring |
+
+### Throughput
+
+gRPC subscribers can handle:
+- 1000+ updates per second
+- Multiple concurrent account streams
+- Lower overhead than WebSocket subscriptions
+
+### Resource Usage
+
+- **Network**: Lower bandwidth than polling
+- **CPU**: Moderate (protocol buffer decoding)
+- **Memory**: Similar to WebSocket subscribers
+
+## Connection Management
+
+### Automatic Reconnection
+
+Enable automatic reconnection on connection loss:
+
+```typescript
+const grpcConfig = {
+  endpoint: 'https://grpc.example.com:443',
+  token: 'your-token',
+  enableReconnect: true, // Enable auto-reconnect
+  commitmentLevel: CommitmentLevel.CONFIRMED,
+};
+```
+
+### Manual Reconnection
+
+Handle reconnection manually:
+
+```typescript
+subscriber.eventEmitter.on('error', async (error) => {
+  console.error('Connection lost:', error);
+  
+  // Wait before reconnecting
+  await new Promise(resolve => setTimeout(resolve, 5000));
+  
+  // Resubscribe
+  try {
+    await subscriber.unsubscribe();
+    await subscriber.subscribe();
+    console.log('Reconnected successfully');
+  } catch (err) {
+    console.error('Reconnection failed:', err);
+  }
+});
+```
+
+## Best Practices
+
+1. **Use connection pooling** - Reuse gRPC clients across multiple subscribers
+2. **Enable reconnection** - Set `enableReconnect: true` for production
+3. **Monitor connection health** - Listen to error events
+4. **Choose appropriate commitment** - Use CONFIRMED for balance of speed and safety
+5. **Handle backpressure** - Process updates quickly to avoid buffer overflow
+6. **Secure credentials** - Store gRPC tokens securely
+
+## Advantages Over WebSocket
+
+- **Lower latency** - Direct streaming from validator
+- **Higher throughput** - More efficient protocol
+- **Better error handling** - Built-in reconnection
+- **Type safety** - Protocol buffer schemas
+- **Multiplexing** - Multiple streams over single connection
+
+## Infrastructure Requirements
+
+### Running Your Own gRPC Server
+
+To run your own Yellowstone gRPC server:
+
+1. Set up a Solana validator with Geyser plugin
+2. Install and configure Yellowstone gRPC plugin
+3. Configure authentication tokens
+4. Set up SSL/TLS certificates
+5. Configure firewall and network access
+
+### Using Hosted Services
+
+Alternatively, use hosted gRPC services:
+
+- **Triton** - Managed Yellowstone gRPC infrastructure
+- **Helius** - gRPC streaming service
+- **Custom providers** - Various RPC providers offer gRPC endpoints
+
+## Troubleshooting
+
+### Connection Errors
+
+```typescript
+// Check endpoint and token
+if (error.message.includes('authentication')) {
+  console.error('Invalid token or endpoint');
+}
+
+// Check network connectivity
+if (error.message.includes('connection')) {
+  console.error('Cannot reach gRPC endpoint');
+}
+```
+
+### Slow Updates
+
+```typescript
+// Monitor update latency
+let lastUpdate = Date.now();
+
+subscriber.eventEmitter.on('update', () => {
+  const latency = Date.now() - lastUpdate;
+  if (latency > 1000) {
+    console.warn('High update latency:', latency, 'ms');
+  }
+  lastUpdate = Date.now();
+});
+```
+
+### Memory Leaks
+
+```typescript
+// Always unsubscribe when done
+try {
+  // Use subscriber
+  await subscriber.subscribe();
+  // ... do work ...
+} finally {
+  // Cleanup
+  await subscriber.unsubscribe();
+}
+```

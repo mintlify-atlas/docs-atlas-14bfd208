@@ -1,0 +1,374 @@
+---
+title: Enum Types
+description: Enumeration types used throughout Drift Protocol v2
+---
+
+Enums and variant types used for classification and state management in Drift Protocol.
+
+## OrderType
+
+Defines the type of order.
+
+```typescript
+export class OrderType {
+  static readonly LIMIT = { limit: {} };
+  static readonly TRIGGER_MARKET = { triggerMarket: {} };
+  static readonly TRIGGER_LIMIT = { triggerLimit: {} };
+  static readonly MARKET = { market: {} };
+  static readonly ORACLE = { oracle: {} };
+}
+```
+
+**Values:**
+- `LIMIT` - Standard limit order that executes at specified price or better
+- `TRIGGER_MARKET` - Market order triggered when price condition is met
+- `TRIGGER_LIMIT` - Limit order triggered when price condition is met
+- `MARKET` - Immediate execution at best available price
+- `ORACLE` - Order priced relative to oracle price with offset
+
+## MarketType
+
+Specifies whether an order/position is for perpetual or spot markets.
+
+```typescript
+export class MarketType {
+  static readonly SPOT = { spot: {} };
+  static readonly PERP = { perp: {} };
+}
+```
+
+**Values:**
+- `SPOT` - Spot market (immediate settlement)
+- `PERP` - Perpetual futures market
+
+## PositionDirection
+
+Defines the direction of a position or order.
+
+```typescript
+export class PositionDirection {
+  static readonly LONG = { long: {} };
+  static readonly SHORT = { short: {} };
+}
+```
+
+**Values:**
+- `LONG` - Long position (buy/bullish)
+- `SHORT` - Short position (sell/bearish)
+
+## OrderStatus
+
+Indicates the current status of an order.
+
+```typescript
+export class OrderStatus {
+  static readonly INIT = { init: {} };
+  static readonly OPEN = { open: {} };
+  static readonly FILLED = { filled: {} };
+  static readonly CANCELED = { canceled: {} };
+}
+```
+
+**Values:**
+- `INIT` - Order initialized but not yet active
+- `OPEN` - Order is active and can be filled
+- `FILLED` - Order has been completely filled
+- `CANCELED` - Order has been canceled
+
+## OrderTriggerCondition
+
+Defines when a trigger order should activate.
+
+```typescript
+export class OrderTriggerCondition {
+  static readonly ABOVE = { above: {} };
+  static readonly BELOW = { below: {} };
+  static readonly TRIGGERED_ABOVE = { triggeredAbove: {} };
+  static readonly TRIGGERED_BELOW = { triggeredBelow: {} };
+}
+```
+
+**Values:**
+- `ABOVE` - Trigger when price goes above trigger price
+- `BELOW` - Trigger when price goes below trigger price
+- `TRIGGERED_ABOVE` - Above condition has been triggered
+- `TRIGGERED_BELOW` - Below condition has been triggered
+
+## PostOnlyParams
+
+Defines post-only behavior for orders.
+
+```typescript
+export class PostOnlyParams {
+  static readonly NONE = { none: {} };
+  static readonly MUST_POST_ONLY = { mustPostOnly: {} };
+  static readonly TRY_POST_ONLY = { tryPostOnly: {} };
+  static readonly SLIDE = { slide: {} };
+}
+```
+
+**Values:**
+- `NONE` - No post-only requirement
+- `MUST_POST_ONLY` - Transaction fails if order can't be maker-only
+- `TRY_POST_ONLY` - Order not placed if can't be maker-only, but transaction succeeds
+- `SLIDE` - Price modified to ensure maker-only if needed
+
+## SizeDistribution
+
+How to distribute order sizes across scale orders.
+
+```typescript
+export class SizeDistribution {
+  static readonly FLAT = { flat: {} };
+  static readonly ASCENDING = { ascending: {} };
+  static readonly DESCENDING = { descending: {} };
+}
+```
+
+**Values:**
+- `FLAT` - Equal size for all orders
+- `ASCENDING` - Smallest at start price, largest at end price
+- `DESCENDING` - Largest at start price, smallest at end price
+
+## MarketStatus
+
+Indicates the operational status of a market.
+
+```typescript
+export class MarketStatus {
+  static readonly INITIALIZED = { initialized: {} };
+  static readonly ACTIVE = { active: {} };
+  static readonly FUNDING_PAUSED = { fundingPaused: {} };
+  static readonly AMM_PAUSED = { ammPaused: {} };
+  static readonly FILL_PAUSED = { fillPaused: {} };
+  static readonly WITHDRAW_PAUSED = { withdrawPaused: {} };
+  static readonly REDUCE_ONLY = { reduceOnly: {} };
+  static readonly SETTLEMENT = { settlement: {} };
+  static readonly DELISTED = { delisted: {} };
+}
+```
+
+**Values:**
+- `INITIALIZED` - Market created but not yet active
+- `ACTIVE` - Market is fully operational
+- `FUNDING_PAUSED` - Funding rate updates paused
+- `AMM_PAUSED` - AMM operations paused
+- `FILL_PAUSED` - Order fills paused
+- `WITHDRAW_PAUSED` - Withdrawals paused
+- `REDUCE_ONLY` - Only position-reducing orders allowed
+- `SETTLEMENT` - Market in settlement mode
+- `DELISTED` - Market has been delisted
+
+## SpotBalanceType
+
+Indicates whether a spot position is a deposit or borrow.
+
+```typescript
+export class SpotBalanceType {
+  static readonly DEPOSIT = { deposit: {} };
+  static readonly BORROW = { borrow: {} };
+}
+```
+
+**Values:**
+- `DEPOSIT` - User has deposited/lent tokens
+- `BORROW` - User has borrowed tokens
+
+## OracleSource
+
+Specifies the oracle provider for price feeds.
+
+```typescript
+export class OracleSource {
+  static readonly PYTH = { pyth: {} };
+  static readonly PYTH_1K = { pyth1K: {} };
+  static readonly PYTH_1M = { pyth1M: {} };
+  static readonly PYTH_PULL = { pythPull: {} };
+  static readonly SWITCHBOARD = { switchboard: {} };
+  static readonly QUOTE_ASSET = { quoteAsset: {} };
+  static readonly PYTH_STABLE_COIN = { pythStableCoin: {} };
+  static readonly SWITCHBOARD_ON_DEMAND = { switchboardOnDemand: {} };
+  static readonly PYTH_LAZER = { pythLazer: {} };
+  // ... additional sources
+}
+```
+
+**Common Values:**
+- `PYTH` - Standard Pyth oracle
+- `PYTH_PULL` - Pyth pull-based oracle
+- `SWITCHBOARD` - Switchboard oracle
+- `SWITCHBOARD_ON_DEMAND` - Switchboard on-demand oracle
+- `QUOTE_ASSET` - Uses quote asset as oracle (for stablecoins)
+
+## ContractType
+
+Type of perpetual contract.
+
+```typescript
+export class ContractType {
+  static readonly PERPETUAL = { perpetual: {} };
+  static readonly FUTURE = { future: {} };
+  static readonly PREDICTION = { prediction: {} };
+}
+```
+
+**Values:**
+- `PERPETUAL` - Perpetual futures (no expiry)
+- `FUTURE` - Dated futures (with expiry)
+- `PREDICTION` - Prediction market
+
+## ContractTier
+
+Risk tier classification for perpetual markets.
+
+```typescript
+export class ContractTier {
+  static readonly A = { a: {} };
+  static readonly B = { b: {} };
+  static readonly C = { c: {} };
+  static readonly SPECULATIVE = { speculative: {} };
+  static readonly HIGHLY_SPECULATIVE = { highlySpeculative: {} };
+  static readonly ISOLATED = { isolated: {} };
+}
+```
+
+**Values:**
+- `A` - Tier A (lowest risk, best margin terms)
+- `B` - Tier B (moderate risk)
+- `C` - Tier C (higher risk)
+- `SPECULATIVE` - Speculative assets
+- `HIGHLY_SPECULATIVE` - Highly speculative assets
+- `ISOLATED` - Isolated margin only
+
+## AssetTier
+
+Risk tier classification for spot assets.
+
+```typescript
+export class AssetTier {
+  static readonly COLLATERAL = { collateral: {} };
+  static readonly PROTECTED = { protected: {} };
+  static readonly CROSS = { cross: {} };
+  static readonly ISOLATED = { isolated: {} };
+  static readonly UNLISTED = { unlisted: {} };
+}
+```
+
+**Values:**
+- `COLLATERAL` - Can be used as collateral
+- `PROTECTED` - Protected asset status
+- `CROSS` - Cross-margin enabled
+- `ISOLATED` - Isolated margin only
+- `UNLISTED` - Not listed for trading
+
+## MarginMode
+
+Margin mode for user accounts.
+
+```typescript
+export class MarginMode {
+  static readonly DEFAULT = { default: {} };
+  static readonly HIGH_LEVERAGE = { highLeverage: {} };
+  static readonly HIGH_LEVERAGE_MAINTENANCE = { highLeverageMaintenance: {} };
+}
+```
+
+**Values:**
+- `DEFAULT` - Standard margin requirements
+- `HIGH_LEVERAGE` - High leverage mode enabled
+- `HIGH_LEVERAGE_MAINTENANCE` - High leverage in maintenance mode
+
+## OrderAction
+
+Type of order action event.
+
+```typescript
+export class OrderAction {
+  static readonly PLACE = { place: {} };
+  static readonly CANCEL = { cancel: {} };
+  static readonly EXPIRE = { expire: {} };
+  static readonly FILL = { fill: {} };
+  static readonly TRIGGER = { trigger: {} };
+}
+```
+
+**Values:**
+- `PLACE` - Order was placed
+- `CANCEL` - Order was canceled
+- `EXPIRE` - Order expired
+- `FILL` - Order was filled
+- `TRIGGER` - Trigger order was activated
+
+## LiquidationType
+
+Type of liquidation.
+
+```typescript
+export class LiquidationType {
+  static readonly LIQUIDATE_PERP = { liquidatePerp: {} };
+  static readonly LIQUIDATE_SPOT = { liquidateSpot: {} };
+  static readonly LIQUIDATE_BORROW_FOR_PERP_PNL = { liquidateBorrowForPerpPnl: {} };
+  static readonly LIQUIDATE_PERP_PNL_FOR_DEPOSIT = { liquidatePerpPnlForDeposit: {} };
+  static readonly PERP_BANKRUPTCY = { perpBankruptcy: {} };
+  static readonly SPOT_BANKRUPTCY = { spotBankruptcy: {} };
+}
+```
+
+**Values:**
+- `LIQUIDATE_PERP` - Liquidate perpetual position
+- `LIQUIDATE_SPOT` - Liquidate spot position
+- `LIQUIDATE_BORROW_FOR_PERP_PNL` - Liquidate borrow to cover perp PnL
+- `LIQUIDATE_PERP_PNL_FOR_DEPOSIT` - Use perp PnL to cover deposit
+- `PERP_BANKRUPTCY` - Perpetual position bankruptcy
+- `SPOT_BANKRUPTCY` - Spot position bankruptcy
+
+## UserStatus
+
+Status flags for user accounts.
+
+```typescript
+export enum UserStatus {
+  BEING_LIQUIDATED = 1,
+  BANKRUPT = 2,
+  REDUCE_ONLY = 4,
+  ADVANCED_LP = 8,
+  PROTECTED_MAKER = 16,
+}
+```
+
+**Values:**
+- `BEING_LIQUIDATED` (1) - Account is being liquidated
+- `BANKRUPT` (2) - Account is bankrupt
+- `REDUCE_ONLY` (4) - Account in reduce-only mode
+- `ADVANCED_LP` (8) - Advanced liquidity provider
+- `PROTECTED_MAKER` (16) - Protected maker status
+
+## ExchangeStatus
+
+Global exchange status flags.
+
+```typescript
+export enum ExchangeStatus {
+  ACTIVE = 0,
+  DEPOSIT_PAUSED = 1,
+  WITHDRAW_PAUSED = 2,
+  AMM_PAUSED = 4,
+  FILL_PAUSED = 8,
+  LIQ_PAUSED = 16,
+  FUNDING_PAUSED = 32,
+  SETTLE_PNL_PAUSED = 64,
+  AMM_IMMEDIATE_FILL_PAUSED = 128,
+  PAUSED = 255,
+}
+```
+
+**Values:**
+- `ACTIVE` (0) - Exchange fully operational
+- `DEPOSIT_PAUSED` (1) - Deposits paused
+- `WITHDRAW_PAUSED` (2) - Withdrawals paused
+- `AMM_PAUSED` (4) - AMM operations paused
+- `FILL_PAUSED` (8) - Order fills paused
+- `LIQ_PAUSED` (16) - Liquidations paused
+- `FUNDING_PAUSED` (32) - Funding updates paused
+- `SETTLE_PNL_PAUSED` (64) - PnL settlement paused
+- `PAUSED` (255) - All operations paused

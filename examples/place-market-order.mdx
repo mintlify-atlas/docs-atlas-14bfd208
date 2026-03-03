@@ -1,0 +1,113 @@
+---
+title: Place Market Order
+description: Place a market order on Drift
+---
+
+Market orders execute immediately at the best available price.
+
+## Complete Example
+
+```typescript market-order.ts
+import {
+  DriftClient,
+  getMarketOrderParams,
+  PositionDirection,
+  BASE_PRECISION,
+  convertToNumber,
+  PRICE_PRECISION,
+  BN,
+  calculateBidAskPrice,
+} from '@drift-labs/sdk';
+
+async function placeMarketOrder(driftClient: DriftClient) {
+  // Get current price
+  const marketIndex = 0; // SOL-PERP
+  const perpMarket = driftClient.getPerpMarketAccount(marketIndex);
+  const oracleData = driftClient.getOracleDataForPerpMarket(marketIndex);
+
+  const [bidPrice, askPrice] = calculateBidAskPrice(
+    perpMarket.amm,
+    oracleData
+  );
+
+  console.log('Current SOL price:');
+  console.log('  Bid:', convertToNumber(bidPrice, PRICE_PRECISION));
+  console.log('  Ask:', convertToNumber(askPrice, PRICE_PRECISION));
+
+  // Place market order to buy 1 SOL-PERP
+  const baseAssetAmount = new BN(1).mul(BASE_PRECISION);
+
+  const orderParams = getMarketOrderParams({
+    marketIndex,
+    direction: PositionDirection.LONG,
+    baseAssetAmount,
+  });
+
+  console.log('\nPlacing market order...');
+  const txSig = await driftClient.placePerpOrder(orderParams);
+  console.log('Order placed:', txSig);
+
+  // Wait for confirmation
+  await driftClient.connection.confirmTransaction(txSig, 'confirmed');
+  console.log('Order confirmed!');
+
+  // Check position
+  const user = driftClient.getUser();
+  await user.fetchAccounts();
+  
+  const position = user.getPerpPosition(marketIndex);
+  if (position) {
+    console.log('\nPosition:');
+    console.log('  Size:', convertToNumber(position.baseAssetAmount, BASE_PRECISION));
+    console.log('  Entry:', convertToNumber(
+      position.quoteAssetAmount.abs().mul(PRICE_PRECISION).div(position.baseAssetAmount.abs()),
+      PRICE_PRECISION
+    ));
+  }
+}
+
+export { placeMarketOrder };
+```
+
+## With Price Protection
+
+Set a maximum price to prevent excessive slippage:
+
+```typescript
+const currentAsk = askPrice;
+const maxPrice = currentAsk.mul(new BN(105)).div(new BN(100)); // +5%
+
+const orderParams = getMarketOrderParams({
+  marketIndex: 0,
+  direction: PositionDirection.LONG,
+  baseAssetAmount: new BN(1).mul(BASE_PRECISION),
+  price: maxPrice, // Will reject if price above this
+});
+
+await driftClient.placePerpOrder(orderParams);
+```
+
+## Key Points
+
+<Accordion title="Market orders execute immediately">
+  Market orders fill against the best available liquidity in the DLOB or AMM.
+</Accordion>
+
+<Accordion title="Set price limits for protection">
+  Always set a maximum acceptable price to protect against slippage.
+</Accordion>
+
+<Accordion title="Check order fills">
+  After placing, query your position to verify the fill.
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Limit Orders" href="/examples/place-limit-order">
+    Place limit orders
+  </Card>
+  <Card title="Modify Orders" href="/examples/modify-order">
+    Modify existing orders
+  </Card>
+</CardGroup>

@@ -1,0 +1,378 @@
+---
+title: Oracle Integration
+description: Work with oracle price feeds in Drift Protocol
+---
+
+Drift Protocol uses oracle price feeds from Pyth and Switchboard for accurate asset pricing. This guide covers how to access oracle data, validate prices, and use oracles in your application.
+
+## Supported Oracle Sources
+
+Drift supports multiple oracle providers:
+
+<CardGroup cols={2}>
+  <Card title="Pyth" icon="chart-line">
+    Primary oracle source
+    - Pyth V1 (pull-based)
+    - Pyth Lazer (low-latency)
+    - Pyth Pull Oracle
+  </Card>
+  <Card title="Switchboard" icon="satellite-dish">
+    Alternative oracle source
+    - Switchboard V2
+    - Switchboard On-Demand
+  </Card>
+  <Card title="Quote Asset" icon="dollar-sign">
+    $1.00 fixed price for stablecoins
+  </Card>
+  <Card title="Prelaunch" icon="rocket">
+    For pre-launch markets
+  </Card>
+</CardGroup>
+
+## Getting Oracle Data
+
+### For Perpetual Markets
+
+```typescript
+import { DriftClient, convertToNumber, PRICE_PRECISION } from '@drift-labs/sdk';
+
+// Get oracle data for SOL-PERP (market 0)
+const oracleData = driftClient.getOracleDataForPerpMarket(0);
+
+console.log('Price:', convertToNumber(oracleData.price, PRICE_PRECISION));
+console.log('Slot:', oracleData.slot);
+console.log('Confidence:', convertToNumber(oracleData.confidence, PRICE_PRECISION));
+console.log('Has sufficient samples:', oracleData.hasSufficientNumberOfDataPoints);
+
+// Get oracle data with slot information
+const { data: oracleDataWithSlot, slot } = driftClient.getOraclePriceDataAndSlot(
+  driftClient.getPerpMarketAccount(0).amm.oracle
+);
+
+if (oracleDataWithSlot) {
+  console.log('Oracle price at slot', slot, ':', oracleDataWithSlot.price.toString());
+}
+```
+
+### For Spot Markets
+
+```typescript
+// Get oracle data for SOL spot market (market 1)
+const spotMarket = driftClient.getSpotMarketAccount(1);
+const oracleData = driftClient.getOracleDataForSpotMarket(1);
+
+console.log('SOL spot oracle price:', convertToNumber(oracleData.price, PRICE_PRECISION));
+console.log('Oracle source:', spotMarket.oracleSource); // e.g., OracleSource.PYTH
+```
+
+## Oracle Price Data Structure
+
+```typescript
+interface OraclePriceData {
+  price: BN;                                // Current price
+  slot: number;                            // Slot number
+  confidence: BN;                          // Confidence interval
+  twap: BN | null;                        // Time-weighted average price
+  twapConfidence: BN | null;              // TWAP confidence
+  hasSufficientNumberOfDataPoints: boolean; // Data quality flag
+}
+```
+
+<ParamField path="price" type="BN">
+  Current oracle price with `PRICE_PRECISION` (10^6)
+</ParamField>
+
+<ParamField path="slot" type="number">
+  Solana slot when price was updated
+</ParamField>
+
+<ParamField path="confidence" type="BN">
+  Price confidence interval (lower is better)
+</ParamField>
+
+<ParamField path="twap" type="BN | null">
+  Time-weighted average price for manipulation resistance
+</ParamField>
+
+<ParamField path="hasSufficientNumberOfDataPoints" type="boolean">
+  Whether oracle has enough data points for reliability
+</ParamField>
+
+## Validating Oracle Data
+
+### Check Oracle Validity
+
+```typescript
+import { isOracleValid } from '@drift-labs/sdk';
+
+const perpMarket = driftClient.getPerpMarketAccount(0);
+const oracleData = driftClient.getOracleDataForPerpMarket(0);
+const currentSlot = await driftClient.connection.getSlot();
+
+const isValid = isOracleValid(
+  perpMarket.amm,
+  oracleData,
+  driftClient.getStateAccount().oracleGuardRails,
+  currentSlot
+);
+
+if (!isValid) {
+  console.warn('⚠️ Oracle data is invalid or stale!');
+}
+```
+
+### Check Price Divergence
+
+```typescript
+import { isOracleTooDivergent } from '@drift-labs/sdk';
+
+// Check if oracle price diverges too much from AMM
+const perpMarket = driftClient.getPerpMarketAccount(0);
+const oracleData = driftClient.getOracleDataForPerpMarket(0);
+
+const divergenceCheck = isOracleTooDivergent(
+  oracleData.price,
+  perpMarket.amm,
+  driftClient.getStateAccount().oracleGuardRails
+);
+
+if (divergenceCheck.tooDivergent) {
+  console.warn('Oracle price diverges from AMM!');
+  console.log('Oracle price:', divergenceCheck.oraclePrice.toString());
+  console.log('Mark price:', divergenceCheck.markPrice.toString());
+}
+```
+
+## Oracle Guard Rails
+
+Drift uses oracle guard rails to protect against invalid or manipulated prices:
+
+```typescript
+const state = driftClient.getStateAccount();
+const guardRails = state.oracleGuardRails;
+
+console.log('Slots before stale:', guardRails.slotsBeforeStaleForAmm);
+console.log('Confidence interval max:', guardRails.confidenceIntervalMaxPercentDivergence);
+console.log('Max divergence:', guardRails.priceDivergence.markOraclePercentDivergence);
+```
+
+### Guard Rail Parameters
+
+<ParamField path="slotsBeforeStaleForAmm" type="number">
+  Number of slots before oracle is considered stale (typically 25-50)
+</ParamField>
+
+<ParamField path="confidenceIntervalMaxPercentDivergence" type="BN">
+  Maximum allowed confidence interval as percent of price
+</ParamField>
+
+<ParamField path="priceDivergence.markOraclePercentDivergence" type="BN">
+  Maximum percent divergence between oracle and mark price
+</ParamField>
+
+## Working with Pyth Oracles
+
+### Pyth Pull Oracles
+
+Pyth pull oracles require price updates to be pushed on-chain:
+
+```typescript
+import { PublicKey } from '@solana/web3.js';
+
+// Get price update from Pyth Hermes API
+const response = await fetch(
+  `https://hermes.pyth.network/api/latest_price_feeds?ids[]=${feedId}`
+);
+const priceData = await response.json();
+
+// Post price update on-chain
+const priceUpdateAccount = /* ... */;
+await driftClient.postPythPullOracleUpdate(priceUpdateAccount, priceData);
+```
+
+### Pyth Lazer
+
+Pyth Lazer provides ultra-low latency price feeds:
+
+```typescript
+import { PythLazerSubscriber } from '@drift-labs/sdk';
+
+// Subscribe to Pyth Lazer feeds
+const pythLazer = new PythLazerSubscriber({
+  connection: driftClient.connection,
+  // Lazer configuration
+});
+
+await pythLazer.subscribe();
+```
+
+## Calculating Prices
+
+### Bid and Ask Prices
+
+```typescript
+import { calculateBidAskPrice, convertToNumber } from '@drift-labs/sdk';
+
+const perpMarket = driftClient.getPerpMarketAccount(0);
+const oracleData = driftClient.getOracleDataForPerpMarket(0);
+
+const [bidPrice, askPrice] = calculateBidAskPrice(
+  perpMarket.amm,
+  oracleData
+);
+
+console.log('Bid price:', convertToNumber(bidPrice, PRICE_PRECISION));
+console.log('Ask price:', convertToNumber(askPrice, PRICE_PRECISION));
+console.log('Spread:', convertToNumber(askPrice.sub(bidPrice), PRICE_PRECISION));
+```
+
+### Mark Price (Fair Value)
+
+```typescript
+import { calculateReservePrice } from '@drift-labs/sdk';
+
+const perpMarket = driftClient.getPerpMarketAccount(0);
+const markPrice = calculateReservePrice(perpMarket, oracleData);
+
+console.log('Mark price:', convertToNumber(markPrice, PRICE_PRECISION));
+```
+
+## Monitoring Oracle Health
+
+```typescript
+import { convertToNumber, PERCENTAGE_PRECISION } from '@drift-labs/sdk';
+
+function monitorOracleHealth(driftClient: DriftClient, marketIndex: number) {
+  const perpMarket = driftClient.getPerpMarketAccount(marketIndex);
+  const oracleData = driftClient.getOracleDataForPerpMarket(marketIndex);
+  const currentSlot = driftClient.getSlot();
+  
+  // Check staleness
+  const slotsSinceUpdate = currentSlot - oracleData.slot;
+  if (slotsSinceUpdate > 25) {
+    console.warn(`Oracle stale by ${slotsSinceUpdate} slots`);
+  }
+  
+  // Check confidence
+  const confidencePercent = oracleData.confidence
+    .mul(PERCENTAGE_PRECISION)
+    .div(oracleData.price);
+  
+  if (confidencePercent.gt(new BN(1000))) { // > 0.1%
+    console.warn(
+      'High confidence interval:',
+      convertToNumber(confidencePercent, PERCENTAGE_PRECISION),
+      '%'
+    );
+  }
+  
+  // Check data quality
+  if (!oracleData.hasSufficientNumberOfDataPoints) {
+    console.warn('Insufficient oracle data points');
+  }
+  
+  // Check divergence
+  const markPrice = calculateReservePrice(perpMarket, oracleData);
+  const divergence = markPrice.sub(oracleData.price).abs()
+    .mul(PERCENTAGE_PRECISION)
+    .div(oracleData.price);
+  
+  if (divergence.gt(new BN(100))) { // > 0.01%
+    console.warn(
+      'Mark/oracle divergence:',
+      convertToNumber(divergence, PERCENTAGE_PRECISION),
+      '%'
+    );
+  }
+}
+
+// Monitor continuously
+setInterval(() => {
+  monitorOracleHealth(driftClient, 0); // SOL-PERP
+}, 5000);
+```
+
+## TWAP for Manipulation Resistance
+
+Drift uses TWAP (Time-Weighted Average Price) to prevent oracle manipulation:
+
+```typescript
+const oracleData = driftClient.getOracleDataForPerpMarket(0);
+
+if (oracleData.twap) {
+  const twapPrice = convertToNumber(oracleData.twap, PRICE_PRECISION);
+  const spotPrice = convertToNumber(oracleData.price, PRICE_PRECISION);
+  
+  console.log('TWAP price:', twapPrice);
+  console.log('Spot price:', spotPrice);
+  console.log('Difference:', Math.abs(twapPrice - spotPrice));
+}
+```
+
+<Info>
+  Drift may use TWAP instead of spot price for certain operations like liquidations to prevent manipulation attacks.
+</Info>
+
+## Oracle Events
+
+Listen for oracle price updates:
+
+```typescript
+driftClient.eventEmitter.on('oraclePriceUpdate', (pubkey, source, data) => {
+  console.log('Oracle update:');
+  console.log('  Address:', pubkey.toBase58());
+  console.log('  Source:', source);
+  console.log('  Price:', convertToNumber(data.price, PRICE_PRECISION));
+  console.log('  Slot:', data.slot);
+  
+  // Find which market uses this oracle
+  const perpMarkets = driftClient.getPerpMarketAccounts();
+  for (const market of perpMarkets) {
+    if (market.amm.oracle.equals(pubkey)) {
+      console.log('  Market:', market.name);
+    }
+  }
+});
+```
+
+## Best Practices
+
+<Accordion title="Always validate oracle data">
+  ```typescript
+  const oracleData = driftClient.getOracleDataForPerpMarket(marketIndex);
+  const currentSlot = await driftClient.connection.getSlot();
+  
+  if (!isOracleValid(perpMarket.amm, oracleData, guardRails, currentSlot)) {
+    throw new Error('Invalid oracle data');
+  }
+  ```
+</Accordion>
+
+<Accordion title="Monitor confidence intervals">
+  High confidence intervals indicate uncertainty. Consider wider price bounds or reduced position sizes when confidence is high.
+</Accordion>
+
+<Accordion title="Check oracle staleness">
+  Stale oracles can lead to inaccurate pricing. Always check the slot difference before using oracle data.
+</Accordion>
+
+<Accordion title="Use TWAP for manipulation resistance">
+  When available, prefer TWAP over spot price for critical operations to prevent flash loan attacks.
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Advanced Features" icon="wand-magic-sparkles" href="/guides/advanced-features">
+    Explore advanced SDK capabilities
+  </Card>
+  <Card title="Oracle Concepts" icon="book" href="/concepts/oracles">
+    Deep dive into oracle mechanics
+  </Card>
+  <Card title="Oracle API" icon="code" href="/api/markets/oracles">
+    Oracle data structures and methods
+  </Card>
+  <Card title="Market Data" icon="chart-mixed" href="/api/markets/perp-markets">
+    Access market and oracle data
+  </Card>
+</CardGroup>

@@ -1,0 +1,425 @@
+---
+title: Managing Positions
+description: Monitor and manage your trading positions on Drift
+---
+
+Drift supports both perpetual and spot positions. This guide covers how to access position data, calculate PnL, and manage open positions.
+
+## Getting Position Data
+
+### Perpetual Positions
+
+```typescript
+import { User, MarketType } from '@drift-labs/sdk';
+
+// Get position for a specific market
+const solPerpPosition = user.getPerpPosition(0); // SOL-PERP
+
+if (solPerpPosition && !positionIsAvailable(solPerpPosition)) {
+  console.log('Base amount:', solPerpPosition.baseAssetAmount.toString());
+  console.log('Quote amount:', solPerpPosition.quoteAssetAmount.toString());
+  console.log('Entry price:', calculateEntryPrice(solPerpPosition));
+  console.log('Liquidation price:', user.liquidationPrice(0, MarketType.PERP));
+}
+
+// Get all active perpetual positions
+const activePerpPositions = user.getActivePerpPositions();
+for (const position of activePerpPositions) {
+  console.log(
+    `Market ${position.marketIndex}:`,
+    position.baseAssetAmount.toString()
+  );
+}
+```
+
+### Spot Positions
+
+```typescript
+// Get spot balance for USDC (market 0)
+const usdcPosition = user.getSpotPosition(0);
+
+if (usdcPosition) {
+  const tokenAmount = user.getTokenAmount(0);
+  console.log('USDC balance:', tokenAmount.toString());
+  
+  // Check if it's a deposit or borrow
+  console.log('Balance type:', usdcPosition.balanceType); // DEPOSIT or BORROW
+}
+
+// Get all active spot positions
+const activeSpotPositions = user.getActiveSpotPositions();
+for (const position of activeSpotPositions) {
+  const amount = user.getTokenAmount(position.marketIndex);
+  console.log(
+    `Spot Market ${position.marketIndex}:`,
+    amount.toString()
+  );
+}
+```
+
+## Calculating Position PnL
+
+### Unrealized PnL
+
+```typescript
+import {
+  calculatePositionPNL,
+  convertToNumber,
+  QUOTE_PRECISION,
+} from '@drift-labs/sdk';
+
+// Get unrealized PnL for SOL-PERP
+const marketIndex = 0;
+const perpMarket = driftClient.getPerpMarketAccount(marketIndex);
+const oracleData = driftClient.getOracleDataForPerpMarket(marketIndex);
+const position = user.getPerpPosition(marketIndex);
+
+if (position) {
+  const pnl = calculatePositionPNL(
+    perpMarket,
+    position,
+    oracleData,
+    false // includeSettledPnl
+  );
+  
+  console.log('Unrealized PnL:', convertToNumber(pnl, QUOTE_PRECISION));
+}
+
+// Get total unrealized PnL across all positions
+const totalUnrealizedPnl = user.getUnrealizedPNL(true, undefined);
+console.log('Total PnL:', convertToNumber(totalUnrealizedPnl, QUOTE_PRECISION));
+```
+
+### Funding Payments
+
+```typescript
+import { calculateUnsettledFundingPnl } from '@drift-labs/sdk';
+
+// Get unsettled funding for a position
+const position = user.getPerpPosition(0);
+if (position) {
+  const perpMarket = driftClient.getPerpMarketAccount(0);
+  const fundingPnl = calculateUnsettledFundingPnl(
+    perpMarket,
+    position
+  );
+  
+  console.log('Unsettled funding:', convertToNumber(fundingPnl, QUOTE_PRECISION));
+}
+
+// Get total funding PnL
+const totalFundingPnl = user.getUnrealizedFundingPNL();
+console.log('Total funding PnL:', convertToNumber(totalFundingPnl, QUOTE_PRECISION));
+```
+
+### Entry and Break-Even Prices
+
+```typescript
+import {
+  calculateEntryPrice,
+  calculateBreakEvenPrice,
+  convertToNumber,
+  PRICE_PRECISION,
+} from '@drift-labs/sdk';
+
+const position = user.getPerpPosition(0);
+if (position) {
+  // Average entry price
+  const entryPrice = calculateEntryPrice(position);
+  console.log('Entry price:', convertToNumber(entryPrice, PRICE_PRECISION));
+  
+  // Break-even price including fees and funding
+  const perpMarket = driftClient.getPerpMarketAccount(0);
+  const breakEvenPrice = calculateBreakEvenPrice(
+    position,
+    perpMarket
+  );
+  console.log('Break-even price:', convertToNumber(breakEvenPrice, PRICE_PRECISION));
+}
+```
+
+## Position Monitoring
+
+### Real-Time Position Updates
+
+```typescript
+// Listen for position updates
+user.eventEmitter.on('userAccountUpdate', (userAccount) => {
+  // Check all positions
+  for (const position of userAccount.perpPositions) {
+    if (!positionIsAvailable(position)) {
+      const pnl = user.getUnrealizedPNL(
+        true,
+        position.marketIndex,
+        MarketType.PERP
+      );
+      
+      console.log(
+        `Position ${position.marketIndex} PnL:`,
+        convertToNumber(pnl, QUOTE_PRECISION)
+      );
+    }
+  }
+});
+```
+
+### Position Size Limits
+
+```typescript
+import { calculateUserMaxPerpOrderSize } from '@drift-labs/sdk';
+
+// Check maximum order size for a market
+const maxOrderSize = calculateUserMaxPerpOrderSize(
+  perpMarket,
+  user.getUserAccount(),
+  perpMarket.amm
+);
+
+console.log('Max order size:', convertToNumber(maxOrderSize, BASE_PRECISION));
+```
+
+## Closing Positions
+
+### Close Entire Position
+
+```typescript
+import { findDirectionToClose, getMarketOrderParams } from '@drift-labs/sdk';
+
+const marketIndex = 0;
+const position = user.getPerpPosition(marketIndex);
+
+if (position && !positionIsAvailable(position)) {
+  const orderParams = getMarketOrderParams({
+    marketIndex,
+    direction: findDirectionToClose(position),
+    baseAssetAmount: position.baseAssetAmount.abs(),
+    reduceOnly: true,
+  });
+  
+  await driftClient.placePerpOrder(orderParams);
+  console.log('Position closed');
+}
+```
+
+### Partial Close
+
+```typescript
+// Close 50% of position
+const position = user.getPerpPosition(0);
+if (position) {
+  const halfSize = position.baseAssetAmount.abs().div(new BN(2));
+  
+  const orderParams = getMarketOrderParams({
+    marketIndex: 0,
+    direction: findDirectionToClose(position),
+    baseAssetAmount: halfSize,
+    reduceOnly: true,
+  });
+  
+  await driftClient.placePerpOrder(orderParams);
+}
+```
+
+### Close All Positions
+
+```typescript
+// Close all active perpetual positions
+const activePositions = user.getActivePerpPositions();
+
+for (const position of activePositions) {
+  const orderParams = getMarketOrderParams({
+    marketIndex: position.marketIndex,
+    direction: findDirectionToClose(position),
+    baseAssetAmount: position.baseAssetAmount.abs(),
+    reduceOnly: true,
+  });
+  
+  await driftClient.placePerpOrder(orderParams);
+  console.log(`Closed position ${position.marketIndex}`);
+}
+```
+
+## Risk Management
+
+### Check Liquidation Risk
+
+```typescript
+// Check if account can be liquidated
+const canBeLiquidated = user.canBeLiquidated();
+if (canBeLiquidated) {
+  console.error('⚠️ Account is below maintenance margin!');
+  
+  // Get health metrics
+  const health = user.getHealth();
+  const marginRatio = user.getMarginRatio();
+  
+  console.log('Health:', health.toString());
+  console.log('Margin ratio:', marginRatio.toString());
+}
+
+// Get liquidation price for each position
+for (let i = 0; i < 32; i++) {
+  const position = user.getPerpPosition(i);
+  if (position && !positionIsAvailable(position)) {
+    const liqPrice = user.liquidationPrice(i, MarketType.PERP);
+    if (liqPrice) {
+      console.log(
+        `Position ${i} liquidation price:`,
+        convertToNumber(liqPrice, PRICE_PRECISION)
+      );
+    }
+  }
+}
+```
+
+### Monitor Leverage
+
+```typescript
+import { convertToNumber, TEN_THOUSAND } from '@drift-labs/sdk';
+
+// Get current leverage
+const leverage = user.getLeverage();
+const leverageNumber = convertToNumber(leverage, TEN_THOUSAND);
+
+console.log('Current leverage:', leverageNumber + 'x');
+
+// Set leverage alert
+if (leverageNumber > 5) {
+  console.warn('⚠️ High leverage detected!');
+}
+```
+
+### Stop-Loss and Take-Profit
+
+```typescript
+import {
+  getTriggerMarketOrderParams,
+  OrderTriggerCondition,
+} from '@drift-labs/sdk';
+
+const position = user.getPerpPosition(0);
+if (position) {
+  const entryPrice = calculateEntryPrice(position);
+  const currentPrice = driftClient.getOracleDataForPerpMarket(0).price;
+  
+  // Stop-loss at -5%
+  const stopLossPrice = entryPrice.mul(new BN(95)).div(new BN(100));
+  
+  await driftClient.placePerpOrder(
+    getTriggerMarketOrderParams({
+      marketIndex: 0,
+      direction: findDirectionToClose(position),
+      baseAssetAmount: position.baseAssetAmount.abs(),
+      triggerPrice: stopLossPrice,
+      triggerCondition: OrderTriggerCondition.BELOW,
+      reduceOnly: true,
+    })
+  );
+  
+  // Take-profit at +10%
+  const takeProfitPrice = entryPrice.mul(new BN(110)).div(new BN(100));
+  
+  await driftClient.placePerpOrder(
+    getTriggerMarketOrderParams({
+      marketIndex: 0,
+      direction: findDirectionToClose(position),
+      baseAssetAmount: position.baseAssetAmount.abs(),
+      triggerPrice: takeProfitPrice,
+      triggerCondition: OrderTriggerCondition.ABOVE,
+      reduceOnly: true,
+    })
+  );
+}
+```
+
+## Position Dashboard Example
+
+```typescript
+import { User, MarketType } from '@drift-labs/sdk';
+
+function displayPositionDashboard(user: User, driftClient: DriftClient) {
+  console.log('\n=== POSITION DASHBOARD ===');
+  
+  // Account health
+  const totalCollateral = user.getTotalCollateral();
+  const freeCollateral = user.getFreeCollateral();
+  const leverage = user.getLeverage();
+  const marginRatio = user.getMarginRatio();
+  
+  console.log('\nAccount Health:');
+  console.log('Total Collateral:', convertToNumber(totalCollateral, QUOTE_PRECISION));
+  console.log('Free Collateral:', convertToNumber(freeCollateral, QUOTE_PRECISION));
+  console.log('Leverage:', convertToNumber(leverage, TEN_THOUSAND) + 'x');
+  console.log('Margin Ratio:', convertToNumber(marginRatio, TEN_THOUSAND) + '%');
+  
+  // Perpetual positions
+  console.log('\nPerpetual Positions:');
+  const perpPositions = user.getActivePerpPositions();
+  
+  for (const position of perpPositions) {
+    const market = driftClient.getPerpMarketAccount(position.marketIndex);
+    const oracleData = driftClient.getOracleDataForPerpMarket(position.marketIndex);
+    
+    const pnl = calculatePositionPNL(market, position, oracleData, false);
+    const entryPrice = calculateEntryPrice(position);
+    const currentPrice = oracleData.price;
+    const size = convertToNumber(position.baseAssetAmount, BASE_PRECISION);
+    
+    console.log(`\n  ${market.name}:`);
+    console.log('  Size:', size);
+    console.log('  Entry:', convertToNumber(entryPrice, PRICE_PRECISION));
+    console.log('  Current:', convertToNumber(currentPrice, PRICE_PRECISION));
+    console.log('  PnL:', convertToNumber(pnl, QUOTE_PRECISION));
+  }
+  
+  // Total PnL
+  const totalPnl = user.getUnrealizedPNL(true);
+  console.log('\nTotal Unrealized PnL:', convertToNumber(totalPnl, QUOTE_PRECISION));
+}
+
+// Update dashboard every 5 seconds
+setInterval(() => {
+  displayPositionDashboard(user, driftClient);
+}, 5000);
+```
+
+## Best Practices
+
+<Accordion title="Always use reduce-only for closing orders">
+  Set `reduceOnly: true` when closing positions to prevent accidentally flipping the position direction.
+</Accordion>
+
+<Accordion title="Monitor funding rates">
+  Funding payments can significantly impact PnL for long-held positions. Check funding rates before entering positions.
+</Accordion>
+
+<Accordion title="Set stop-losses">
+  Always use trigger orders for stop-losses to protect against liquidation and limit losses.
+</Accordion>
+
+<Accordion title="Track settled vs unsettled PnL">
+  ```typescript
+  // Unsettled PnL (mark-to-market)
+  const unrealizedPnl = user.getUnrealizedPNL(false);
+  
+  // Settled PnL (realized + claimable)
+  const settledPnl = user.getUnrealizedPNL(true);
+  ```
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Account Subscriptions" icon="signal-stream" href="/guides/account-subscriptions">
+    Real-time position updates
+  </Card>
+  <Card title="Oracle Integration" icon="eye" href="/guides/oracle-integration">
+    Work with price feeds
+  </Card>
+  <Card title="Position API" icon="code" href="/api/math/position">
+    Position calculation functions
+  </Card>
+  <Card title="Margin Calculations" icon="calculator" href="/math/margin-calculations">
+    Understand margin requirements
+  </Card>
+</CardGroup>

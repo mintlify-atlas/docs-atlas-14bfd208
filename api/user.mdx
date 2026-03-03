@@ -1,0 +1,652 @@
+---
+title: 'User'
+description: 'User account management and position tracking for Drift Protocol v2'
+---
+
+# User
+
+The `User` class provides methods for managing individual user accounts, tracking positions, calculating margins, and analyzing account health.
+
+## Constructor
+
+```typescript
+new User(config: UserConfig)
+```
+
+<ParamField path="config" type="UserConfig" required>
+  Configuration object for initializing the User
+  
+  <Expandable title="properties">
+    <ParamField path="driftClient" type="DriftClient" required>
+      DriftClient instance
+    </ParamField>
+    
+    <ParamField path="userAccountPublicKey" type="PublicKey" required>
+      Public key of the user account
+    </ParamField>
+    
+    <ParamField path="accountSubscription" type="UserSubscriptionConfig">
+      Account subscription configuration
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Subscription Methods
+
+### subscribe
+
+Subscribes to user account state updates.
+
+```typescript
+await user.subscribe(userAccount?: UserAccount): Promise<boolean>
+```
+
+<ParamField path="userAccount" type="UserAccount">
+  Optional pre-fetched user account data
+</ParamField>
+
+<ResponseField name="return" type="Promise<boolean>">
+  Returns `true` if subscription was successful
+</ResponseField>
+
+### unsubscribe
+
+Unsubscribes from user account updates.
+
+```typescript
+await user.unsubscribe(): Promise<void>
+```
+
+### fetchAccounts
+
+Forces a fetch of fresh account data from RPC.
+
+```typescript
+await user.fetchAccounts(): Promise<void>
+```
+
+## Account Data Methods
+
+### getUserAccount
+
+Returns the current user account data.
+
+```typescript
+user.getUserAccount(): UserAccount
+```
+
+<ResponseField name="return" type="UserAccount">
+  User account containing positions, orders, and settings
+</ResponseField>
+
+### getUserAccountAndSlot
+
+Returns user account data with the slot number.
+
+```typescript
+user.getUserAccountAndSlot(): DataAndSlot<UserAccount> | undefined
+```
+
+<ResponseField name="return" type="DataAndSlot<UserAccount> | undefined">
+  User account data with slot information
+</ResponseField>
+
+### exists
+
+Checks if the user account exists on-chain.
+
+```typescript
+await user.exists(): Promise<boolean>
+```
+
+<ResponseField name="return" type="Promise<boolean>">
+  Returns `true` if the account exists
+</ResponseField>
+
+## Position Methods
+
+### getPerpPosition
+
+Returns the user's position for a specific perpetual market.
+
+```typescript
+user.getPerpPosition(marketIndex: number): PerpPosition | undefined
+```
+
+<ParamField path="marketIndex" type="number" required>
+  Perpetual market index
+</ParamField>
+
+<ResponseField name="return" type="PerpPosition | undefined">
+  Perpetual position data or undefined if no position exists
+</ResponseField>
+
+### getSpotPosition
+
+Returns the user's position for a specific spot market.
+
+```typescript
+user.getSpotPosition(marketIndex: number): SpotPosition | undefined
+```
+
+<ParamField path="marketIndex" type="number" required>
+  Spot market index
+</ParamField>
+
+<ResponseField name="return" type="SpotPosition | undefined">
+  Spot position data or undefined if no position exists
+</ResponseField>
+
+### getActivePerpPositions
+
+Returns all active perpetual positions.
+
+```typescript
+user.getActivePerpPositions(): PerpPosition[]
+```
+
+<ResponseField name="return" type="PerpPosition[]">
+  Array of active perpetual positions
+</ResponseField>
+
+### getActiveSpotPositions
+
+Returns all active spot positions.
+
+```typescript
+user.getActiveSpotPositions(): SpotPosition[]
+```
+
+<ResponseField name="return" type="SpotPosition[]">
+  Array of active spot positions
+</ResponseField>
+
+### getTokenAmount
+
+Returns the token amount for a spot market position in the token's native precision.
+
+```typescript
+user.getTokenAmount(marketIndex: number): BN
+```
+
+<ParamField path="marketIndex" type="number" required>
+  Spot market index
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Token amount (positive for deposits, negative for borrows)
+</ResponseField>
+
+## Order Methods
+
+### getOrder
+
+Returns an order by its order ID.
+
+```typescript
+user.getOrder(orderId: number): Order | undefined
+```
+
+<ParamField path="orderId" type="number" required>
+  Order ID to retrieve
+</ParamField>
+
+<ResponseField name="return" type="Order | undefined">
+  Order data or undefined if not found
+</ResponseField>
+
+### getOrderByUserOrderId
+
+Returns an order by its user-defined order ID.
+
+```typescript
+user.getOrderByUserOrderId(userOrderId: number): Order | undefined
+```
+
+<ParamField path="userOrderId" type="number" required>
+  User-defined order ID
+</ParamField>
+
+<ResponseField name="return" type="Order | undefined">
+  Order data or undefined if not found
+</ResponseField>
+
+### getOpenOrders
+
+Returns all open orders.
+
+```typescript
+user.getOpenOrders(): Order[]
+```
+
+<ResponseField name="return" type="Order[]">
+  Array of open orders
+</ResponseField>
+
+## Margin & Collateral Methods
+
+### getFreeCollateral
+
+Calculates free collateral available for trading.
+
+```typescript
+user.getFreeCollateral(
+  marginCategory?: MarginCategory,
+  enterHighLeverageMode?: boolean,
+  perpMarketIndex?: number
+): BN
+```
+
+<ParamField path="marginCategory" type="MarginCategory" default="Initial">
+  Margin category: 'Initial' or 'Maintenance'
+</ParamField>
+
+<ParamField path="enterHighLeverageMode" type="boolean" default={false}>
+  Whether to calculate for high leverage mode
+</ParamField>
+
+<ParamField path="perpMarketIndex" type="number">
+  Specific perp market index for isolated margin calculation
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Free collateral in USDC precision (1e6)
+</ResponseField>
+
+### getTotalCollateral
+
+Calculates total collateral including unrealized PnL.
+
+```typescript
+user.getTotalCollateral(
+  marginCategory?: MarginCategory,
+  strict?: boolean,
+  includeOpenOrders?: boolean,
+  liquidationBuffer?: BN,
+  perpMarketIndex?: number
+): BN
+```
+
+<ParamField path="marginCategory" type="MarginCategory" default="Initial">
+  Margin category: 'Initial' or 'Maintenance'
+</ParamField>
+
+<ParamField path="strict" type="boolean" default={false}>
+  Whether to use strict oracle prices
+</ParamField>
+
+<ParamField path="includeOpenOrders" type="boolean" default={true}>
+  Whether to include open orders in calculation
+</ParamField>
+
+<ParamField path="liquidationBuffer" type="BN">
+  Liquidation buffer to apply
+</ParamField>
+
+<ParamField path="perpMarketIndex" type="number">
+  Specific perp market for isolated margin
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Total collateral in USDC precision (1e6)
+</ResponseField>
+
+### getMarginRequirement
+
+Calculates the margin requirement for the account.
+
+```typescript
+user.getMarginRequirement(
+  marginCategory: MarginCategory,
+  liquidationBuffer?: BN,
+  strict?: boolean,
+  includeOpenOrders?: boolean,
+  enteringHighLeverage?: boolean,
+  perpMarketIndex?: number
+): BN
+```
+
+<ParamField path="marginCategory" type="MarginCategory" required>
+  Margin category: 'Initial' or 'Maintenance'
+</ParamField>
+
+<ParamField path="liquidationBuffer" type="BN">
+  Additional buffer for liquidation calculations
+</ParamField>
+
+<ParamField path="strict" type="boolean">
+  Whether to use strict pricing
+</ParamField>
+
+<ParamField path="includeOpenOrders" type="boolean">
+  Whether to include open orders
+</ParamField>
+
+<ParamField path="enteringHighLeverage" type="boolean">
+  Whether entering high leverage mode
+</ParamField>
+
+<ParamField path="perpMarketIndex" type="number">
+  Specific perp market for isolated margin
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Margin requirement in USDC precision (1e6)
+</ResponseField>
+
+### getInitialMarginRequirement
+
+Calculates the initial margin requirement.
+
+```typescript
+user.getInitialMarginRequirement(
+  enterHighLeverageMode?: boolean,
+  perpMarketIndex?: number
+): BN
+```
+
+<ParamField path="enterHighLeverageMode" type="boolean" default={false}>
+  Whether to calculate for high leverage mode
+</ParamField>
+
+<ParamField path="perpMarketIndex" type="number">
+  Specific perp market for isolated margin
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Initial margin requirement in USDC precision (1e6)
+</ResponseField>
+
+### getMaintenanceMarginRequirement
+
+Calculates the maintenance margin requirement.
+
+```typescript
+user.getMaintenanceMarginRequirement(
+  liquidationBuffer?: BN,
+  perpMarketIndex?: number
+): BN
+```
+
+<ParamField path="liquidationBuffer" type="BN">
+  Liquidation buffer to apply
+</ParamField>
+
+<ParamField path="perpMarketIndex" type="number">
+  Specific perp market for isolated margin
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Maintenance margin requirement in USDC precision (1e6)
+</ResponseField>
+
+## PnL & Value Methods
+
+### getUnrealizedPNL
+
+Calculates unrealized profit and loss.
+
+```typescript
+user.getUnrealizedPNL(
+  withFunding?: boolean,
+  marketIndex?: number,
+  withWeightMarginCategory?: MarginCategory,
+  strict?: boolean,
+  liquidationBuffer?: BN
+): BN
+```
+
+<ParamField path="withFunding" type="boolean">
+  Whether to include funding payments
+</ParamField>
+
+<ParamField path="marketIndex" type="number">
+  Specific market index (or all markets if undefined)
+</ParamField>
+
+<ParamField path="withWeightMarginCategory" type="MarginCategory">
+  Apply margin category weights to PnL
+</ParamField>
+
+<ParamField path="strict" type="boolean">
+  Use strict oracle pricing
+</ParamField>
+
+<ParamField path="liquidationBuffer" type="BN">
+  Liquidation buffer to apply
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Unrealized PnL in USDC precision (1e6)
+</ResponseField>
+
+### getUnrealizedFundingPNL
+
+Calculates unrealized funding payment PnL.
+
+```typescript
+user.getUnrealizedFundingPNL(marketIndex?: number): BN
+```
+
+<ParamField path="marketIndex" type="number">
+  Specific market index (or all markets if undefined)
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Unrealized funding PnL in USDC precision (1e6)
+</ResponseField>
+
+### getNetUsdValue
+
+Calculates the net USD value of the account.
+
+```typescript
+user.getNetUsdValue(): BN
+```
+
+<ResponseField name="return" type="BN">
+  Net USD value in USDC precision (1e6)
+</ResponseField>
+
+### getTotalAllTimePnl
+
+Calculates all-time profit and loss.
+
+```typescript
+user.getTotalAllTimePnl(): BN
+```
+
+<ResponseField name="return" type="BN">
+  All-time PnL in USDC precision (1e6)
+</ResponseField>
+
+## Leverage & Risk Methods
+
+### getLeverage
+
+Calculates current account leverage.
+
+```typescript
+user.getLeverage(
+  includeOpenOrders?: boolean,
+  perpMarketIndex?: number
+): BN
+```
+
+<ParamField path="includeOpenOrders" type="boolean" default={true}>
+  Whether to include open orders
+</ParamField>
+
+<ParamField path="perpMarketIndex" type="number">
+  Specific perp market for isolated position
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Leverage with precision TEN_THOUSAND (1e4)
+</ResponseField>
+
+### getMarginRatio
+
+Calculates the margin ratio (inverse of leverage).
+
+```typescript
+user.getMarginRatio(): BN
+```
+
+<ResponseField name="return" type="BN">
+  Margin ratio with precision TEN_THOUSAND (1e4)
+</ResponseField>
+
+### getHealth
+
+Calculates account health as a percentage.
+
+```typescript
+user.getHealth(perpMarketIndex?: number): number
+```
+
+<ParamField path="perpMarketIndex" type="number">
+  Specific perp market for isolated position health
+</ParamField>
+
+<ResponseField name="return" type="number">
+  Health percentage from 0-100 (0 = liquidatable, 100 = max health)
+</ResponseField>
+
+### canBeLiquidated
+
+Checks if the account can be liquidated.
+
+```typescript
+user.canBeLiquidated(): AccountLiquidatableStatus & {
+  isolatedPositions: Map<number, AccountLiquidatableStatus>
+}
+```
+
+<ResponseField name="return" type="object">
+  Liquidation status for cross margin and isolated positions
+  
+  <Expandable title="properties">
+    <ResponseField name="canBeLiquidated" type="boolean">
+      Whether the account can be liquidated
+    </ResponseField>
+    <ResponseField name="marginRequirement" type="BN">
+      Current margin requirement
+    </ResponseField>
+    <ResponseField name="totalCollateral" type="BN">
+      Current total collateral
+    </ResponseField>
+    <ResponseField name="isolatedPositions" type="Map<number, AccountLiquidatableStatus>">
+      Liquidation status for each isolated position by market index
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### liquidationPrice
+
+Calculates the liquidation price for a perpetual position.
+
+```typescript
+user.liquidationPrice(
+  marketIndex: number,
+  positionBaseSizeChange?: BN,
+  estimatedEntryPrice?: BN,
+  marginCategory?: MarginCategory,
+  includeOpenOrders?: boolean,
+  offsetCollateral?: BN,
+  enteringHighLeverage?: boolean,
+  marginType?: MarginType
+): BN
+```
+
+<ParamField path="marketIndex" type="number" required>
+  Perpetual market index
+</ParamField>
+
+<ParamField path="positionBaseSizeChange" type="BN" default="ZERO">
+  Change in position size to calculate for
+</ParamField>
+
+<ParamField path="estimatedEntryPrice" type="BN" default="ZERO">
+  Estimated entry price for the trade
+</ParamField>
+
+<ParamField path="marginCategory" type="MarginCategory" default="Maintenance">
+  Margin category to use
+</ParamField>
+
+<ParamField path="includeOpenOrders" type="boolean" default={false}>
+  Whether to include open orders
+</ParamField>
+
+<ParamField path="offsetCollateral" type="BN" default="ZERO">
+  Additional collateral to add
+</ParamField>
+
+<ParamField path="enteringHighLeverage" type="boolean" default={false}>
+  Whether entering high leverage mode
+</ParamField>
+
+<ParamField path="marginType" type="MarginType">
+  'Cross' or 'Isolated'
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Liquidation price in PRICE_PRECISION (1e6), or -1 if position won't liquidate
+</ResponseField>
+
+## Properties
+
+<ResponseField name="driftClient" type="DriftClient">
+  Reference to the DriftClient instance
+</ResponseField>
+
+<ResponseField name="userAccountPublicKey" type="PublicKey">
+  Public key of the user account
+</ResponseField>
+
+<ResponseField name="isSubscribed" type="boolean">
+  Whether the user is subscribed to account updates
+</ResponseField>
+
+## Usage Example
+
+```typescript
+import { User } from '@drift-labs/sdk';
+
+// Get user from DriftClient
+const user = driftClient.getUser();
+
+// Subscribe to user account updates
+await user.subscribe();
+
+// Get account data
+const userAccount = user.getUserAccount();
+console.log('Authority:', userAccount.authority.toBase58());
+
+// Get positions
+const perpPositions = user.getActivePerpPositions();
+console.log('Active perp positions:', perpPositions.length);
+
+// Calculate account metrics
+const freeCollateral = user.getFreeCollateral();
+const leverage = user.getLeverage();
+const health = user.getHealth();
+
+console.log('Free Collateral:', freeCollateral.toString());
+console.log('Leverage:', leverage.toNumber() / 10000); // Convert from precision
+console.log('Health:', health, '%');
+
+// Check specific position
+const solPerpPosition = user.getPerpPosition(0); // SOL-PERP
+if (solPerpPosition) {
+  console.log('SOL-PERP base amount:', solPerpPosition.baseAssetAmount.toString());
+  
+  // Calculate liquidation price
+  const liqPrice = user.liquidationPrice(0);
+  console.log('Liquidation price:', liqPrice.toNumber() / 1e6);
+}
+
+// Unsubscribe when done
+await user.unsubscribe();
+```

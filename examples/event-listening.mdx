@@ -1,0 +1,312 @@
+---
+title: Event Listening
+description: Listen to and process Drift Protocol events
+---
+
+Drift emits events for all protocol activities. This guide shows how to listen to and process these events.
+
+## Event Types
+
+Drift emits events for:
+- Order placement, fills, and cancellations
+- Position changes
+- Liquidations
+- Funding rate updates
+- PnL settlements
+
+## Listen to All Events
+
+```typescript event-listener.ts
+import {
+  EventSubscriber,
+  WrappedEvent,
+  DriftClient,
+} from '@drift-labs/sdk';
+
+async function listenToEvents(driftClient: DriftClient) {
+  // Create event subscriber
+  const eventSubscriber = new EventSubscriber({
+    connection: driftClient.connection,
+    programId: driftClient.program.programId,
+  });
+
+  await eventSubscriber.subscribe();
+
+  // Listen for all events
+  eventSubscriber.eventEmitter.on('newEvent', (event: WrappedEvent) => {
+    console.log('\nNew event:', event.eventType);
+    console.log('Slot:', event.slot);
+    console.log('Tx:', event.txSig);
+    console.log('Data:', event.data);
+  });
+
+  console.log('Listening for events...');
+}
+
+export { listenToEvents };
+```
+
+## Order Events
+
+### OrderRecord (Order Placement)
+
+```typescript
+import { OrderRecord } from '@drift-labs/sdk';
+
+eventSubscriber.eventEmitter.on('newEvent', (event: WrappedEvent) => {
+  if (event.eventType === 'OrderRecord') {
+    const orderRecord = event.data as OrderRecord;
+    
+    console.log('Order Placed:');
+    console.log('  User:', orderRecord.user.toBase58());
+    console.log('  Order ID:', orderRecord.orderId);
+    console.log('  Market:', orderRecord.marketIndex);
+    console.log('  Direction:', orderRecord.direction);
+    console.log('  Size:', orderRecord.baseAssetAmount.toString());
+    console.log('  Price:', orderRecord.price?.toString());
+    console.log('  Order type:', orderRecord.orderType);
+  }
+});
+```
+
+### OrderActionRecord (Fills/Cancels)
+
+```typescript
+import { OrderActionRecord } from '@drift-labs/sdk';
+
+eventSubscriber.eventEmitter.on('newEvent', (event: WrappedEvent) => {
+  if (event.eventType === 'OrderActionRecord') {
+    const actionRecord = event.data as OrderActionRecord;
+    
+    console.log('Order Action:');
+    console.log('  Action:', actionRecord.action);
+    console.log('  Taker:', actionRecord.taker?.toBase58());
+    console.log('  Maker:', actionRecord.maker?.toBase58());
+    console.log('  Fill amount:', actionRecord.baseAssetAmountFilled?.toString());
+    console.log('  Fill price:', actionRecord.quoteAssetAmountFilled?.toString());
+    console.log('  Taker fee:', actionRecord.takerFee?.toString());
+    console.log('  Maker rebate:', actionRecord.makerRebate?.toString());
+  }
+});
+```
+
+## Position Events
+
+### FundingPaymentRecord
+
+```typescript
+import { FundingPaymentRecord, convertToNumber, QUOTE_PRECISION } from '@drift-labs/sdk';
+
+eventSubscriber.eventEmitter.on('newEvent', (event: WrappedEvent) => {
+  if (event.eventType === 'FundingPaymentRecord') {
+    const fundingRecord = event.data as FundingPaymentRecord;
+    
+    console.log('Funding Payment:');
+    console.log('  User:', fundingRecord.user.toBase58());
+    console.log('  Market:', fundingRecord.marketIndex);
+    console.log('  Amount:', convertToNumber(fundingRecord.fundingPayment, QUOTE_PRECISION));
+    console.log('  Position:', fundingRecord.baseAssetAmount.toString());
+  }
+});
+```
+
+### SettlePnlRecord
+
+```typescript
+import { SettlePnlRecord } from '@drift-labs/sdk';
+
+eventSubscriber.eventEmitter.on('newEvent', (event: WrappedEvent) => {
+  if (event.eventType === 'SettlePnlRecord') {
+    const settlePnlRecord = event.data as SettlePnlRecord;
+    
+    console.log('PnL Settled:');
+    console.log('  User:', settlePnlRecord.user.toBase58());
+    console.log('  Market:', settlePnlRecord.marketIndex);
+    console.log('  PnL:', convertToNumber(settlePnlRecord.pnl, QUOTE_PRECISION));
+  }
+});
+```
+
+## Liquidation Events
+
+```typescript
+import { LiquidationRecord } from '@drift-labs/sdk';
+
+eventSubscriber.eventEmitter.on('newEvent', (event: WrappedEvent) => {
+  if (event.eventType === 'LiquidationRecord') {
+    const liquidationRecord = event.data as LiquidationRecord;
+    
+    console.log('Liquidation:');
+    console.log('  User:', liquidationRecord.user.toBase58());
+    console.log('  Liquidator:', liquidationRecord.liquidator.toBase58());
+    console.log('  Market:', liquidationRecord.marketIndex);
+    console.log('  Liquidation type:', liquidationRecord.liquidationType);
+    console.log('  Base amount:', liquidationRecord.liquidatePerp?.baseAssetAmount?.toString());
+    console.log('  Quote amount:', liquidationRecord.liquidatePerp?.quoteAssetAmount?.toString());
+  }
+});
+```
+
+## Account Updates
+
+### User Account Updates
+
+```typescript
+import { User } from '@drift-labs/sdk';
+
+const user = new User({
+  driftClient,
+  userAccountPublicKey: await driftClient.getUserAccountPublicKey(),
+  accountSubscription: {
+    type: 'websocket',
+  },
+});
+
+await user.subscribe();
+
+user.eventEmitter.on('userAccountUpdate', (userAccount) => {
+  console.log('User account updated');
+  console.log('  Settled PnL:', userAccount.settledPerpPnl.toString());
+  console.log('  Active positions:', userAccount.perpPositions.filter(
+    p => !positionIsAvailable(p)
+  ).length);
+  console.log('  Open orders:', userAccount.orders.filter(
+    o => o.status === OrderStatus.OPEN
+  ).length);
+});
+```
+
+### Market Updates
+
+```typescript
+driftClient.eventEmitter.on('perpMarketAccountUpdate', (market) => {
+  console.log(`Market ${market.marketIndex} updated`);
+  console.log('  Base reserve:', market.amm.baseAssetReserve.toString());
+  console.log('  Quote reserve:', market.amm.quoteAssetReserve.toString());
+  console.log('  Last funding rate:', market.amm.lastFundingRate.toString());
+});
+```
+
+### Oracle Updates
+
+```typescript
+driftClient.eventEmitter.on('oraclePriceUpdate', (pubkey, source, data) => {
+  console.log('Oracle price update:');
+  console.log('  Oracle:', pubkey.toBase58());
+  console.log('  Source:', source);
+  console.log('  Price:', convertToNumber(data.price, PRICE_PRECISION));
+  console.log('  Confidence:', data.confidence.toString());
+  console.log('  Slot:', data.slot);
+});
+```
+
+## Parse Transaction Logs
+
+```typescript
+import { parseLogsForEvents } from '@drift-labs/sdk';
+
+// Get transaction
+const tx = await connection.getTransaction(txSig, {
+  commitment: 'confirmed',
+});
+
+if (tx?.meta?.logMessages) {
+  // Parse events from logs
+  const events = parseLogsForEvents(tx.meta.logMessages);
+  
+  for (const event of events) {
+    console.log('Event from tx:', event.eventType);
+    console.log('Data:', event.data);
+  }
+}
+```
+
+## Filter Events
+
+```typescript
+// Filter events for specific user
+const myUserPubkey = await driftClient.getUserAccountPublicKey();
+
+eventSubscriber.eventEmitter.on('newEvent', (event: WrappedEvent) => {
+  if (event.eventType === 'OrderRecord') {
+    const orderRecord = event.data as OrderRecord;
+    
+    if (orderRecord.user.equals(myUserPubkey)) {
+      console.log('My order placed:', orderRecord.orderId);
+    }
+  }
+});
+```
+
+## Event Monitoring Dashboard
+
+```typescript
+class EventMonitor {
+  private orderCount = 0;
+  private fillCount = 0;
+  private liquidationCount = 0;
+
+  async start(driftClient: DriftClient) {
+    const eventSubscriber = new EventSubscriber({
+      connection: driftClient.connection,
+      programId: driftClient.program.programId,
+    });
+
+    await eventSubscriber.subscribe();
+
+    eventSubscriber.eventEmitter.on('newEvent', (event) => {
+      switch (event.eventType) {
+        case 'OrderRecord':
+          this.orderCount++;
+          break;
+        case 'OrderActionRecord':
+          const action = event.data as OrderActionRecord;
+          if (action.action === 'Fill') {
+            this.fillCount++;
+          }
+          break;
+        case 'LiquidationRecord':
+          this.liquidationCount++;
+          break;
+      }
+    });
+
+    // Print stats every 10 seconds
+    setInterval(() => {
+      console.log('\nEvent Stats:');
+      console.log('  Orders:', this.orderCount);
+      console.log('  Fills:', this.fillCount);
+      console.log('  Liquidations:', this.liquidationCount);
+    }, 10000);
+  }
+}
+```
+
+## Best Practices
+
+<Accordion title="Handle reconnections">
+  Implement reconnection logic for WebSocket disconnects.
+</Accordion>
+
+<Accordion title="Buffer events">
+  Buffer events during processing to avoid missing data.
+</Accordion>
+
+<Accordion title="Filter early">
+  Filter for relevant events early to reduce processing load.
+</Accordion>
+
+<Accordion title="Error handling">
+  Always handle errors gracefully and log for debugging.
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Market Making" href="/examples/market-making">
+    Use events in market making
+  </Card>
+  <Card title="Event Types" href="/api/types/orders">
+    All event type definitions
+  </Card>
+</CardGroup>

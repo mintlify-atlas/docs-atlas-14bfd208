@@ -1,0 +1,113 @@
+---
+title: "Conversion Utilities"
+description: "Number conversion functions for converting between BN and number types"
+---
+
+The conversion utilities provide functions for converting between BigNumber (BN) and JavaScript number types with proper precision handling.
+
+## Functions
+
+### convertToNumber
+
+Converts a BigNumber to a JavaScript number with specified precision.
+
+```typescript
+convertToNumber(
+  bigNumber: BN,
+  precision?: BN
+): number
+```
+
+<ParamField path="bigNumber" type="BN" required>
+  The BigNumber value to convert
+</ParamField>
+
+<ParamField path="precision" type="BN" default="PRICE_PRECISION">
+  The precision to use for conversion. Defaults to PRICE_PRECISION
+</ParamField>
+
+<ResponseField name="return" type="number">
+  The converted number value. Returns 0 if bigNumber is falsy
+</ResponseField>
+
+#### Usage Example
+
+```typescript
+import { convertToNumber } from '@drift-labs/sdk';
+import { BN } from '@coral-xyz/anchor';
+import { PRICE_PRECISION } from '@drift-labs/sdk';
+
+const bigNum = new BN(1000000); // 1.0 in PRICE_PRECISION
+const number = convertToNumber(bigNum, PRICE_PRECISION);
+console.log(number); // 1
+
+// With default precision
+const price = new BN(50000000); // 50.0 in PRICE_PRECISION
+const priceNum = convertToNumber(price);
+console.log(priceNum); // 50
+```
+
+### convertToBN
+
+Converts a JavaScript number to a BigNumber with specified precision.
+
+```typescript
+convertToBN(
+  value: number,
+  precision: BN
+): BN
+```
+
+<ParamField path="value" type="number" required>
+  The number value to convert
+</ParamField>
+
+<ParamField path="precision" type="BN" required>
+  The precision to use for conversion (e.g., PRICE_PRECISION, BASE_PRECISION)
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  The converted BigNumber value
+</ResponseField>
+
+#### Usage Example
+
+```typescript
+import { convertToBN } from '@drift-labs/sdk';
+import { BN } from '@coral-xyz/anchor';
+import { PRICE_PRECISION, BASE_PRECISION } from '@drift-labs/sdk';
+
+// Convert price
+const price = 42.5;
+const priceBN = convertToBN(price, PRICE_PRECISION);
+console.log(priceBN.toString()); // 42500000
+
+// Convert base amount
+const baseAmount = 1.25;
+const baseAmountBN = convertToBN(baseAmount, BASE_PRECISION);
+console.log(baseAmountBN.toString()); // 1250000000
+
+// Handles whole numbers
+const wholeNum = 100;
+const wholeNumBN = convertToBN(wholeNum, PRICE_PRECISION);
+console.log(wholeNumBN.toString()); // 100000000
+```
+
+## Implementation Details
+
+The conversion functions properly handle:
+- Whole and decimal parts separately to maintain precision
+- Division and modulo operations to extract components
+- Rounding of decimal parts using `Math.round()` and `Math.floor()`
+- Zero and null values
+
+## Common Precision Constants
+
+```typescript
+import {
+  PRICE_PRECISION,      // 1e6
+  BASE_PRECISION,       // 1e9
+  QUOTE_PRECISION,      // 1e6
+  MARGIN_PRECISION,     // 1e4
+} from '@drift-labs/sdk';
+```

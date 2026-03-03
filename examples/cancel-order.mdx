@@ -1,0 +1,159 @@
+---
+title: Cancel Order
+description: Cancel orders on Drift
+---
+
+Cancel individual orders, multiple orders, or all orders.
+
+## Cancel Single Order
+
+```typescript cancel-single.ts
+import { DriftClient } from '@drift-labs/sdk';
+
+async function cancelOrder(driftClient: DriftClient, orderId: number) {
+  console.log(`Canceling order ${orderId}...`);
+  
+  const txSig = await driftClient.cancelOrder(orderId);
+  console.log('Order canceled:', txSig);
+}
+
+export { cancelOrder };
+```
+
+## Cancel by User Order ID
+
+```typescript
+// Cancel by custom user order ID
+await driftClient.cancelOrderByUserOrderId(42);
+```
+
+## Cancel Multiple Orders
+
+```typescript cancel-multiple.ts
+import { DriftClient, MarketType, PositionDirection } from '@drift-labs/sdk';
+
+async function cancelMultipleOrders(driftClient: DriftClient) {
+  // Cancel specific order IDs
+  const orderIds = [1, 2, 3, 4, 5];
+  await driftClient.cancelOrders(
+    MarketType.PERP,
+    undefined, // all markets
+    undefined, // both directions
+    orderIds
+  );
+  
+  console.log('Canceled orders:', orderIds);
+}
+
+export { cancelMultipleOrders };
+```
+
+## Cancel All Orders for Market
+
+```typescript
+// Cancel all orders for SOL-PERP
+await driftClient.cancelOrders(
+  MarketType.PERP,
+  0, // market index (SOL-PERP)
+  undefined // both directions
+);
+```
+
+## Cancel All Orders by Direction
+
+```typescript
+import { PositionDirection } from '@drift-labs/sdk';
+
+// Cancel all long orders across all markets
+await driftClient.cancelOrders(
+  MarketType.PERP,
+  undefined, // all markets
+  PositionDirection.LONG
+);
+```
+
+## Cancel All Orders
+
+```typescript cancel-all.ts
+import { DriftClient } from '@drift-labs/sdk';
+
+async function cancelAllOrders(driftClient: DriftClient) {
+  console.log('Canceling all orders...');
+  
+  const txSig = await driftClient.cancelAllOrders();
+  console.log('All orders canceled:', txSig);
+  
+  // Verify
+  const user = driftClient.getUser();
+  await user.fetchAccounts();
+  
+  const openOrders = user.getOpenOrders();
+  console.log('Open orders remaining:', openOrders.length);
+}
+
+export { cancelAllOrders };
+```
+
+## Cancel by Market Type
+
+```typescript
+import { MarketType } from '@drift-labs/sdk';
+
+// Cancel all perp orders
+await driftClient.cancelOrdersByMarketType(MarketType.PERP);
+
+// Cancel all spot orders
+await driftClient.cancelOrdersByMarketType(MarketType.SPOT);
+```
+
+## Batch Cancel with Iteration
+
+```typescript
+const user = driftClient.getUser();
+await user.fetchAccounts();
+
+const openOrders = user.getOpenOrders();
+console.log(`Canceling ${openOrders.length} orders...`);
+
+// Cancel all open orders
+for (const order of openOrders) {
+  if (order.orderId) {
+    await driftClient.cancelOrder(order.orderId);
+    console.log(`Canceled order ${order.orderId}`);
+  }
+}
+```
+
+## Cancel and Place New (Modify Alternative)
+
+```typescript
+import { getLimitOrderParams } from '@drift-labs/sdk';
+
+// Cancel old order
+await driftClient.cancelOrder(oldOrderId);
+
+// Place new order
+const newOrderParams = getLimitOrderParams({
+  marketIndex: 0,
+  direction: PositionDirection.LONG,
+  baseAssetAmount: new BN(2).mul(BASE_PRECISION),
+  price: new BN(150).mul(PRICE_PRECISION),
+});
+
+await driftClient.placePerpOrder(newOrderParams);
+```
+
+<Warning>
+  Canceling all orders cannot be undone. Make sure you want to cancel everything.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Market Making" href="/examples/market-making">
+    Build a market maker
+  </Card>
+  <Card title="Position Management" href="/guides/managing-positions">
+    Manage open positions
+  </Card>
+</CardGroup>

@@ -1,0 +1,99 @@
+---
+title: Market Accounts
+description: Market account structures in Drift Protocol
+---
+
+Market accounts store configuration and state for perpetual and spot markets.
+
+## PerpMarket Account
+
+Perpetual market configuration and AMM state.
+
+### Key Fields
+
+<ResponseField name="marketIndex" type="u16">
+  Unique market identifier
+</ResponseField>
+
+<ResponseField name="amm" type="AMM">
+  Automated market maker state including reserves, oracle, and funding
+</ResponseField>
+
+<ResponseField name="marginRatioInitial" type="u32">
+  Initial margin requirement
+</ResponseField>
+
+<ResponseField name="marginRatioMaintenance" type="u32">
+  Maintenance margin requirement
+</ResponseField>
+
+<ResponseField name="imfFactor" type="u32">
+  Initial margin fraction factor for size-based scaling
+</ResponseField>
+
+<ResponseField name="status" type="MarketStatus">
+  Market status (ACTIVE, PAUSED, etc.)
+</ResponseField>
+
+<ResponseField name="contractType" type="ContractType">
+  PERPETUAL or FUTURE
+</ResponseField>
+
+<ResponseField name="contractTier" type="ContractTier">
+  Risk tier (A, B, C, SPECULATIVE, ISOLATED)
+</ResponseField>
+
+## SpotMarket Account
+
+Spot market configuration for collateral assets.
+
+### Key Fields
+
+<ResponseField name="marketIndex" type="u16">
+  Unique market identifier
+</ResponseField>
+
+<ResponseField name="mint" type="Pubkey">
+  SPL token mint address
+</ResponseField>
+
+<ResponseField name="vault" type="Pubkey">
+  Token vault holding deposits
+</ResponseField>
+
+<ResponseField name="initialAssetWeight" type="u32">
+  Weight for initial margin calculations
+</ResponseField>
+
+<ResponseField name="maintenanceAssetWeight" type="u32">
+  Weight for maintenance margin
+</ResponseField>
+
+<ResponseField name="depositBalance" type="u128">
+  Total deposits in the market
+</ResponseField>
+
+<ResponseField name="borrowBalance" type="u128">
+  Total borrows in the market
+</ResponseField>
+
+<ResponseField name="optimalUtilization" type="u32">
+  Optimal utilization rate for interest
+</ResponseField>
+
+## TypeScript Types
+
+<CardGroup cols={2}>
+  <Card title="Market Types" href="/api/types/accounts">
+    Full TypeScript interfaces
+  </Card>
+  <Card title="Perp Markets API" href="/api/markets/perp-markets">
+    Access market data
+  </Card>
+  <Card title="Spot Markets API" href="/api/markets/spot-markets">
+    Spot market methods
+  </Card>
+  <Card title="Market Concepts" href="/concepts/markets">
+    Understanding markets
+  </Card>
+</CardGroup>

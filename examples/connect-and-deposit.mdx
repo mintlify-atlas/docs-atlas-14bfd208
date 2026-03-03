@@ -1,0 +1,165 @@
+---
+title: Connect and Deposit
+description: Connect to Drift and deposit collateral
+---
+
+This example shows how to initialize Drift Client, connect your wallet, and deposit collateral.
+
+## Complete Example
+
+```typescript connect-deposit.ts
+import { Connection, Keypair, PublicKey } from '@solana/web3.js';
+import { Wallet } from '@coral-xyz/anchor';
+import { getAssociatedTokenAddress } from '@solana/spl-token';
+import {
+  DriftClient,
+  initialize,
+  BulkAccountLoader,
+  QUOTE_PRECISION,
+  BN,
+} from '@drift-labs/sdk';
+
+async function connectAndDeposit() {
+  // 1. Initialize config
+  const sdkConfig = initialize({ env: 'devnet' });
+
+  // 2. Set up connection
+  const connection = new Connection(
+    process.env.RPC_URL || 'https://api.devnet.solana.com',
+    'confirmed'
+  );
+
+  // 3. Load wallet
+  const keypair = Keypair.fromSecretKey(
+    Uint8Array.from(JSON.parse(process.env.PRIVATE_KEY!))
+  );
+  const wallet = new Wallet(keypair);
+
+  console.log('Wallet:', wallet.publicKey.toBase58());
+
+  // 4. Create account loader
+  const bulkAccountLoader = new BulkAccountLoader(
+    connection,
+    'confirmed',
+    1000
+  );
+
+  // 5. Initialize DriftClient
+  const driftClient = new DriftClient({
+    connection,
+    wallet,
+    programID: new PublicKey(sdkConfig.DRIFT_PROGRAM_ID),
+    accountSubscription: {
+      type: 'polling',
+      accountLoader: bulkAccountLoader,
+    },
+  });
+
+  await driftClient.subscribe();
+  console.log('DriftClient initialized');
+
+  // 6. Check if user account exists
+  const userAccountPublicKey = await driftClient.getUserAccountPublicKey();
+  const accountInfo = await connection.getAccountInfo(userAccountPublicKey);
+  const userAccountExists = accountInfo !== null;
+
+  // 7. Deposit collateral
+  if (!userAccountExists) {
+    console.log('Creating user account and depositing...');
+    
+    // Deposit $1000 USDC
+    const depositAmount = new BN(1000).mul(QUOTE_PRECISION);
+    
+    const usdcMint = new PublicKey(sdkConfig.USDC_MINT_ADDRESS);
+    const userUsdcAccount = await getAssociatedTokenAddress(
+      usdcMint,
+      wallet.publicKey
+    );
+
+    const txSig = await driftClient.initializeUserAccountAndDepositCollateral(
+      depositAmount,
+      userUsdcAccount,
+      0, // USDC market index
+      0, // sub-account ID
+    );
+
+    console.log('Account created and funded:', txSig);
+  } else {
+    console.log('User account exists');
+    
+    // Just deposit more
+    const depositAmount = new BN(100).mul(QUOTE_PRECISION);
+    
+    const usdcMint = new PublicKey(sdkConfig.USDC_MINT_ADDRESS);
+    const userUsdcAccount = await getAssociatedTokenAddress(
+      usdcMint,
+      wallet.publicKey
+    );
+
+    const txSig = await driftClient.deposit(
+      depositAmount,
+      0, // USDC market index
+      userUsdcAccount
+    );
+
+    console.log('Deposited $100 USDC:', txSig);
+  }
+
+  console.log('Ready to trade!');
+}
+
+connectAndDeposit().catch(console.error);
+```
+
+## Step-by-Step
+
+<Steps>
+  <Step title="Initialize SDK Config">
+    ```typescript
+    const sdkConfig = initialize({ env: 'devnet' });
+    ```
+    Gets the correct program IDs and addresses for the environment.
+  </Step>
+
+  <Step title="Create Connection">
+    ```typescript
+    const connection = new Connection(rpcUrl, 'confirmed');
+    ```
+    Connects to Solana RPC.
+  </Step>
+
+  <Step title="Initialize DriftClient">
+    ```typescript
+    const driftClient = new DriftClient({
+      connection,
+      wallet,
+      programID,
+      accountSubscription: { type: 'polling', accountLoader },
+    });
+    await driftClient.subscribe();
+    ```
+  </Step>
+
+  <Step title="Deposit Collateral">
+    ```typescript
+    await driftClient.initializeUserAccountAndDepositCollateral(
+      amount,
+      tokenAccount,
+      marketIndex,
+      subAccountId
+    );
+    ```
+    Creates account and deposits in one transaction.
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Place Order" href="/examples/place-market-order">
+    Place your first order
+  </Card>
+  <Card title="Account Management" href="/guides/account-management">
+    Learn more about accounts
+  </Card>
+</CardGroup>

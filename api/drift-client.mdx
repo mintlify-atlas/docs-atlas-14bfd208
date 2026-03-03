@@ -1,0 +1,465 @@
+---
+title: 'DriftClient'
+description: 'Main client for interacting with Drift Protocol v2'
+---
+
+# DriftClient
+
+The `DriftClient` class is the primary interface for interacting with Drift Protocol. It provides methods for managing user accounts, executing trades, handling deposits/withdrawals, and subscribing to protocol state.
+
+## Constructor
+
+```typescript
+new DriftClient(config: DriftClientConfig)
+```
+
+<ParamField path="config" type="DriftClientConfig" required>
+  Configuration object for initializing the DriftClient
+  
+  <Expandable title="properties">
+    <ParamField path="connection" type="Connection" required>
+      Solana RPC connection
+    </ParamField>
+    
+    <ParamField path="wallet" type="IWallet" required>
+      Wallet adapter for signing transactions
+    </ParamField>
+    
+    <ParamField path="programID" type="PublicKey">
+      Drift program ID (defaults to mainnet program ID)
+    </ParamField>
+    
+    <ParamField path="env" type="DriftEnv">
+      Environment: 'mainnet-beta' | 'devnet' (default: 'mainnet-beta')
+    </ParamField>
+    
+    <ParamField path="opts" type="ConfirmOptions">
+      Transaction confirmation options
+    </ParamField>
+    
+    <ParamField path="accountSubscription" type="AccountSubscriptionConfig">
+      Configuration for account subscription method (websocket, polling, or grpc)
+    </ParamField>
+    
+    <ParamField path="activeSubAccountId" type="number">
+      Default sub-account ID (default: 0)
+    </ParamField>
+    
+    <ParamField path="subAccountIds" type="number[]">
+      Array of sub-account IDs to subscribe to
+    </ParamField>
+    
+    <ParamField path="txVersion" type="TransactionVersion">
+      Transaction version: 0 (versioned) or 'legacy'
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Subscription Methods
+
+### subscribe
+
+Subscribes to Drift Protocol state and user accounts.
+
+```typescript
+await driftClient.subscribe(): Promise<boolean>
+```
+
+<ResponseField name="return" type="Promise<boolean>">
+  Returns `true` if subscription was successful
+</ResponseField>
+
+### unsubscribe
+
+Unsubscribes from all accounts and cleans up resources.
+
+```typescript
+await driftClient.unsubscribe(): Promise<void>
+```
+
+### fetchAccounts
+
+Forces the account subscriber to fetch fresh account data from RPC.
+
+```typescript
+await driftClient.fetchAccounts(): Promise<void>
+```
+
+## User Account Management
+
+### initializeUserAccount
+
+Initializes a new user account with optional referrer information.
+
+```typescript
+await driftClient.initializeUserAccount(
+  subAccountId?: number,
+  name?: string,
+  referrerInfo?: ReferrerInfo,
+  txParams?: TxParams
+): Promise<[TransactionSignature, PublicKey]>
+```
+
+<ParamField path="subAccountId" type="number" default={0}>
+  Sub-account ID to initialize
+</ParamField>
+
+<ParamField path="name" type="string">
+  Account name (defaults to "Main Account" for sub-account 0)
+</ParamField>
+
+<ParamField path="referrerInfo" type="ReferrerInfo">
+  Referrer information for fee sharing
+  
+  <Expandable title="properties">
+    <ParamField path="referrer" type="PublicKey" required>
+      Referrer's user account public key
+    </ParamField>
+    <ParamField path="referrerStats" type="PublicKey" required>
+      Referrer's user stats account public key
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="txParams" type="TxParams">
+  Transaction parameters (compute units, priority fees)
+</ParamField>
+
+<ResponseField name="return" type="Promise<[TransactionSignature, PublicKey]>">
+  Returns a tuple of [transaction signature, user account public key]
+</ResponseField>
+
+### deleteUser
+
+Deletes a user account and reclaims rent.
+
+```typescript
+await driftClient.deleteUser(
+  subAccountId?: number,
+  txParams?: TxParams
+): Promise<TransactionSignature>
+```
+
+<ParamField path="subAccountId" type="number" default={0}>
+  Sub-account ID to delete
+</ParamField>
+
+<ParamField path="txParams" type="TxParams">
+  Transaction parameters
+</ParamField>
+
+<ResponseField name="return" type="Promise<TransactionSignature>">
+  Transaction signature
+</ResponseField>
+
+### getUser
+
+Returns a User instance for the specified sub-account.
+
+```typescript
+driftClient.getUser(
+  subAccountId?: number,
+  authority?: PublicKey
+): User
+```
+
+<ParamField path="subAccountId" type="number">
+  Sub-account ID (defaults to activeSubAccountId)
+</ParamField>
+
+<ParamField path="authority" type="PublicKey">
+  Authority public key (defaults to wallet public key)
+</ParamField>
+
+<ResponseField name="return" type="User">
+  User instance for the specified account
+</ResponseField>
+
+### getUserAccount
+
+Returns the UserAccount data for the specified sub-account.
+
+```typescript
+driftClient.getUserAccount(
+  subAccountId?: number,
+  authority?: PublicKey
+): UserAccount | undefined
+```
+
+<ParamField path="subAccountId" type="number">
+  Sub-account ID (defaults to activeSubAccountId)
+</ParamField>
+
+<ParamField path="authority" type="PublicKey">
+  Authority public key
+</ParamField>
+
+<ResponseField name="return" type="UserAccount | undefined">
+  User account data or undefined if not found
+</ResponseField>
+
+### switchActiveUser
+
+Switches the active sub-account.
+
+```typescript
+await driftClient.switchActiveUser(
+  subAccountId: number,
+  authority?: PublicKey
+): Promise<void>
+```
+
+<ParamField path="subAccountId" type="number" required>
+  New active sub-account ID
+</ParamField>
+
+<ParamField path="authority" type="PublicKey">
+  Authority for the new active account
+</ParamField>
+
+## Market Data Methods
+
+### getPerpMarketAccount
+
+Returns perpetual market account data.
+
+```typescript
+driftClient.getPerpMarketAccount(
+  marketIndex: number
+): PerpMarketAccount | undefined
+```
+
+<ParamField path="marketIndex" type="number" required>
+  Perpetual market index
+</ParamField>
+
+<ResponseField name="return" type="PerpMarketAccount | undefined">
+  Perpetual market account data
+</ResponseField>
+
+### getSpotMarketAccount
+
+Returns spot market account data.
+
+```typescript
+driftClient.getSpotMarketAccount(
+  marketIndex: number
+): SpotMarketAccount | undefined
+```
+
+<ParamField path="marketIndex" type="number" required>
+  Spot market index
+</ParamField>
+
+<ResponseField name="return" type="SpotMarketAccount | undefined">
+  Spot market account data
+</ResponseField>
+
+### getOraclePriceDataAndSlot
+
+Returns oracle price data with the slot number.
+
+```typescript
+driftClient.getOraclePriceDataAndSlot(
+  oraclePublicKey: PublicKey,
+  oracleSource: OracleSource
+): DataAndSlot<OraclePriceData> | undefined
+```
+
+<ParamField path="oraclePublicKey" type="PublicKey" required>
+  Oracle account public key
+</ParamField>
+
+<ParamField path="oracleSource" type="OracleSource" required>
+  Oracle source type (e.g., Pyth, Switchboard)
+</ParamField>
+
+<ResponseField name="return" type="DataAndSlot<OraclePriceData> | undefined">
+  Oracle price data with slot number
+</ResponseField>
+
+## State Methods
+
+### getStateAccount
+
+Returns the Drift protocol state account.
+
+```typescript
+driftClient.getStateAccount(): StateAccount
+```
+
+<ResponseField name="return" type="StateAccount">
+  Drift protocol state containing global parameters
+</ResponseField>
+
+### getStatePublicKey
+
+Returns the public key of the state account.
+
+```typescript
+await driftClient.getStatePublicKey(): Promise<PublicKey>
+```
+
+<ResponseField name="return" type="Promise<PublicKey>">
+  State account public key
+</ResponseField>
+
+## Wallet Management
+
+### updateWallet
+
+Updates the wallet used for signing transactions and re-subscribes to user accounts.
+
+```typescript
+await driftClient.updateWallet(
+  newWallet: IWallet,
+  subAccountIds?: number[],
+  activeSubAccountId?: number,
+  includeDelegates?: boolean,
+  authoritySubaccountMap?: Map<string, number[]>
+): Promise<boolean>
+```
+
+<ParamField path="newWallet" type="IWallet" required>
+  New wallet adapter
+</ParamField>
+
+<ParamField path="subAccountIds" type="number[]">
+  Sub-account IDs to subscribe to
+</ParamField>
+
+<ParamField path="activeSubAccountId" type="number">
+  New active sub-account ID
+</ParamField>
+
+<ParamField path="includeDelegates" type="boolean">
+  Whether to include delegated accounts
+</ParamField>
+
+<ParamField path="authoritySubaccountMap" type="Map<string, number[]>">
+  Map of authority addresses to sub-account IDs
+</ParamField>
+
+<ResponseField name="return" type="Promise<boolean>">
+  Returns `true` if wallet update and re-subscription was successful
+</ResponseField>
+
+## Helper Methods
+
+### convertToSpotPrecision
+
+Converts an amount to the correct precision for a spot market.
+
+```typescript
+driftClient.convertToSpotPrecision(
+  marketIndex: number,
+  amount: BN | number
+): BN
+```
+
+<ParamField path="marketIndex" type="number" required>
+  Spot market index
+</ParamField>
+
+<ParamField path="amount" type="BN | number" required>
+  Amount to convert
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Amount in spot market precision
+</ResponseField>
+
+### convertToPerpPrecision
+
+Converts an amount to perpetual market precision (1e9).
+
+```typescript
+driftClient.convertToPerpPrecision(
+  amount: BN | number
+): BN
+```
+
+<ParamField path="amount" type="BN | number" required>
+  Amount to convert
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Amount in BASE_PRECISION (1e9)
+</ResponseField>
+
+### convertToPricePrecision
+
+Converts an amount to price precision (1e6).
+
+```typescript
+driftClient.convertToPricePrecision(
+  amount: BN | number
+): BN
+```
+
+<ParamField path="amount" type="BN | number" required>
+  Amount to convert
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Amount in PRICE_PRECISION (1e6)
+</ResponseField>
+
+## Properties
+
+<ResponseField name="connection" type="Connection">
+  Solana RPC connection instance
+</ResponseField>
+
+<ResponseField name="wallet" type="IWallet">
+  Wallet adapter for signing transactions
+</ResponseField>
+
+<ResponseField name="program" type="Program">
+  Anchor program instance for Drift Protocol
+</ResponseField>
+
+<ResponseField name="authority" type="PublicKey">
+  Current authority public key
+</ResponseField>
+
+<ResponseField name="activeSubAccountId" type="number">
+  Currently active sub-account ID
+</ResponseField>
+
+<ResponseField name="isSubscribed" type="boolean">
+  Whether the client is currently subscribed to accounts
+</ResponseField>
+
+## Usage Example
+
+```typescript
+import { DriftClient, Wallet } from '@drift-labs/sdk';
+import { Connection, PublicKey } from '@solana/web3.js';
+
+// Initialize connection and wallet
+const connection = new Connection('https://api.mainnet-beta.solana.com');
+const wallet = new Wallet(keypair);
+
+// Create DriftClient instance
+const driftClient = new DriftClient({
+  connection,
+  wallet,
+  env: 'mainnet-beta',
+  txVersion: 0,
+});
+
+// Subscribe to accounts
+await driftClient.subscribe();
+
+// Get perpetual market data
+const perpMarket = driftClient.getPerpMarketAccount(0);
+console.log('SOL-PERP Oracle Price:', perpMarket.amm.lastOraclePrice);
+
+// Get user account
+const user = driftClient.getUser();
+const userAccount = user.getUserAccount();
+
+// Unsubscribe when done
+await driftClient.unsubscribe();
+```

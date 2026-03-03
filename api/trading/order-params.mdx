@@ -1,0 +1,351 @@
+---
+title: 'OrderParams'
+description: 'Order parameters and configuration for placing orders in Drift Protocol v2'
+---
+
+## Overview
+
+OrderParams defines the complete configuration for placing orders on Drift Protocol. The SDK provides helper functions to create specific order types with sensible defaults.
+
+## OrderParams Type
+
+<ParamField path="orderType" type="OrderType" required>
+  The type of order to place.
+  
+  **OrderType variants:**
+  - `OrderType.LIMIT` - Limit order with specified price
+  - `OrderType.MARKET` - Market order executed at best available price
+  - `OrderType.TRIGGER_MARKET` - Triggers a market order when condition is met
+  - `OrderType.TRIGGER_LIMIT` - Triggers a limit order when condition is met
+  - `OrderType.ORACLE` - Order priced relative to oracle price
+</ParamField>
+
+<ParamField path="marketType" type="MarketType" required>
+  Market type for the order.
+  
+  **MarketType variants:**
+  - `MarketType.PERP` - Perpetual futures market
+  - `MarketType.SPOT` - Spot market
+</ParamField>
+
+<ParamField path="direction" type="PositionDirection" required>
+  Direction of the order.
+  
+  **PositionDirection variants:**
+  - `PositionDirection.LONG` - Buy/long position
+  - `PositionDirection.SHORT` - Sell/short position
+</ParamField>
+
+<ParamField path="baseAssetAmount" type="BN" required>
+  Amount of base asset to trade, in base precision (typically 1e9 for most markets).
+</ParamField>
+
+<ParamField path="price" type="BN" required>
+  Limit price for the order in PRICE_PRECISION (1e6). Set to 0 for market orders.
+</ParamField>
+
+<ParamField path="marketIndex" type="number" required>
+  Index of the market to trade on.
+</ParamField>
+
+<ParamField path="userOrderId" type="number" default="0">
+  User-defined order ID for tracking. Must be unique per user.
+</ParamField>
+
+<ParamField path="reduceOnly" type="boolean" default="false">
+  If true, order can only reduce existing position, not increase or flip it.
+</ParamField>
+
+<ParamField path="postOnly" type="PostOnlyParams" default="PostOnlyParams.NONE">
+  Post-only constraint for the order.
+  
+  **PostOnlyParams variants:**
+  - `PostOnlyParams.NONE` - No post-only constraint
+  - `PostOnlyParams.MUST_POST_ONLY` - Transaction fails if order can't be post-only
+  - `PostOnlyParams.TRY_POST_ONLY` - Order not placed if it can't be post-only
+  - `PostOnlyParams.SLIDE` - Price adjusted to be post-only if needed
+</ParamField>
+
+<ParamField path="bitFlags" type="number" default="0">
+  Bit flags for order options.
+  
+  **OrderParamsBitFlag values:**
+  - `OrderParamsBitFlag.ImmediateOrCancel` (1) - Cancel unfilled portion immediately
+  - `OrderParamsBitFlag.UpdateHighLeverageMode` (2) - Update high leverage mode
+</ParamField>
+
+<ParamField path="triggerPrice" type="BN | null" default="null">
+  Trigger price for trigger orders in PRICE_PRECISION (1e6). Required for TRIGGER_MARKET and TRIGGER_LIMIT orders.
+</ParamField>
+
+<ParamField path="triggerCondition" type="OrderTriggerCondition" default="OrderTriggerCondition.ABOVE">
+  Condition for trigger activation.
+  
+  **OrderTriggerCondition variants:**
+  - `OrderTriggerCondition.ABOVE` - Trigger when price goes above trigger price
+  - `OrderTriggerCondition.BELOW` - Trigger when price goes below trigger price
+  - `OrderTriggerCondition.TRIGGERED_ABOVE` - Trigger condition above has been met
+  - `OrderTriggerCondition.TRIGGERED_BELOW` - Trigger condition below has been met
+</ParamField>
+
+<ParamField path="oraclePriceOffset" type="number | null" default="null">
+  Price offset from oracle price in basis points. Used for floating limit orders.
+</ParamField>
+
+<ParamField path="auctionDuration" type="number | null" default="null">
+  Duration of the auction phase in slots. During auction, order transitions from taking to resting.
+</ParamField>
+
+<ParamField path="maxTs" type="BN | null" default="null">
+  Maximum timestamp (Unix seconds) for order validity. Order expires after this time.
+</ParamField>
+
+<ParamField path="auctionStartPrice" type="BN | null" default="null">
+  Starting price for auction in PRICE_PRECISION (1e6).
+</ParamField>
+
+<ParamField path="auctionEndPrice" type="BN | null" default="null">
+  Ending price for auction in PRICE_PRECISION (1e6).
+</ParamField>
+
+## Helper Functions
+
+### getOrderParams
+
+Creates an OrderParams object with default values merged with provided parameters.
+
+```typescript
+import { getOrderParams } from '@drift-labs/sdk';
+
+const orderParams = getOrderParams({
+  orderType: OrderType.LIMIT,
+  marketIndex: 0,
+  direction: PositionDirection.LONG,
+  baseAssetAmount: new BN(1000000000), // 1 SOL
+  price: new BN(50000000), // $50
+});
+```
+
+**Parameters:**
+- `optionalOrderParams` (OptionalOrderParams) - Order parameters to set
+- `overridingParams` (Record\<string, any\>) - Additional parameters to override
+
+**Returns:** Complete OrderParams object
+
+### getLimitOrderParams
+
+Creates parameters for a limit order.
+
+```typescript
+import { getLimitOrderParams } from '@drift-labs/sdk';
+
+const limitOrder = getLimitOrderParams({
+  marketIndex: 0,
+  direction: PositionDirection.LONG,
+  baseAssetAmount: new BN(1000000000),
+  price: new BN(50000000),
+});
+```
+
+**Parameters:**
+- `params` - Order parameters excluding orderType
+- `params.price` (BN) - Required limit price
+
+**Returns:** OptionalOrderParams with orderType set to LIMIT
+
+### getMarketOrderParams
+
+Creates parameters for a market order.
+
+```typescript
+import { getMarketOrderParams } from '@drift-labs/sdk';
+
+const marketOrder = getMarketOrderParams({
+  marketIndex: 0,
+  direction: PositionDirection.LONG,
+  baseAssetAmount: new BN(1000000000),
+});
+```
+
+**Parameters:**
+- `params` - Order parameters excluding orderType
+
+**Returns:** OptionalOrderParams with orderType set to MARKET
+
+### getTriggerMarketOrderParams
+
+Creates parameters for a trigger market order (stop loss or take profit).
+
+```typescript
+import { getTriggerMarketOrderParams } from '@drift-labs/sdk';
+
+const stopLoss = getTriggerMarketOrderParams({
+  marketIndex: 0,
+  direction: PositionDirection.SHORT,
+  baseAssetAmount: new BN(1000000000),
+  triggerCondition: OrderTriggerCondition.BELOW,
+  triggerPrice: new BN(45000000), // $45
+});
+```
+
+**Parameters:**
+- `params` - Order parameters excluding orderType
+- `params.triggerCondition` (OrderTriggerCondition) - Required trigger condition
+- `params.triggerPrice` (BN) - Required trigger price
+
+**Returns:** OptionalOrderParams with orderType set to TRIGGER_MARKET
+
+### getTriggerLimitOrderParams
+
+Creates parameters for a trigger limit order.
+
+```typescript
+import { getTriggerLimitOrderParams } from '@drift-labs/sdk';
+
+const triggerLimit = getTriggerLimitOrderParams({
+  marketIndex: 0,
+  direction: PositionDirection.SHORT,
+  baseAssetAmount: new BN(1000000000),
+  triggerCondition: OrderTriggerCondition.BELOW,
+  triggerPrice: new BN(45000000),
+  price: new BN(44500000), // Limit price after trigger
+});
+```
+
+**Parameters:**
+- `params` - Order parameters excluding orderType
+- `params.triggerCondition` (OrderTriggerCondition) - Required trigger condition
+- `params.triggerPrice` (BN) - Required trigger price
+- `params.price` (BN) - Required limit price after trigger
+
+**Returns:** OptionalOrderParams with orderType set to TRIGGER_LIMIT
+
+## Scale Orders
+
+Scale orders allow placing multiple limit orders distributed across a price range.
+
+### ScaleOrderParams
+
+<ParamField path="marketType" type="MarketType" required>
+  Market type for the orders.
+</ParamField>
+
+<ParamField path="direction" type="PositionDirection" required>
+  Direction of the orders.
+</ParamField>
+
+<ParamField path="marketIndex" type="number" required>
+  Index of the market.
+</ParamField>
+
+<ParamField path="totalBaseAssetAmount" type="BN" required>
+  Total base asset amount to distribute across all orders.
+</ParamField>
+
+<ParamField path="startPrice" type="BN" required>
+  Starting price for the scale in PRICE_PRECISION (1e6).
+</ParamField>
+
+<ParamField path="endPrice" type="BN" required>
+  Ending price for the scale in PRICE_PRECISION (1e6).
+</ParamField>
+
+<ParamField path="orderCount" type="number" required>
+  Number of orders to place (min 2, max 32). Total open orders cannot exceed 32.
+</ParamField>
+
+<ParamField path="sizeDistribution" type="SizeDistribution" required>
+  How to distribute sizes across orders.
+  
+  **SizeDistribution variants:**
+  - `SizeDistribution.FLAT` - Equal size for all orders
+  - `SizeDistribution.ASCENDING` - Smallest at start price, largest at end price
+  - `SizeDistribution.DESCENDING` - Largest at start price, smallest at end price
+</ParamField>
+
+<ParamField path="reduceOnly" type="boolean" required>
+  Whether orders should be reduce-only.
+</ParamField>
+
+<ParamField path="postOnly" type="PostOnlyParams" required>
+  Post-only setting for all orders.
+</ParamField>
+
+<ParamField path="bitFlags" type="number" required>
+  Bit flags for the orders.
+</ParamField>
+
+<ParamField path="maxTs" type="BN | null" required>
+  Maximum timestamp for orders to be valid.
+</ParamField>
+
+## Utility Functions
+
+### isUpdateHighLeverageMode
+
+Checks if the UpdateHighLeverageMode bit flag is set.
+
+```typescript
+import { isUpdateHighLeverageMode, OrderParamsBitFlag } from '@drift-labs/sdk';
+
+const bitFlags = OrderParamsBitFlag.UpdateHighLeverageMode;
+const isHighLeverage = isUpdateHighLeverageMode(bitFlags); // true
+```
+
+**Parameters:**
+- `bitFlags` (number) - Bit flags to check
+
+**Returns:** boolean - True if UpdateHighLeverageMode flag is set
+
+## Default Values
+
+The SDK provides default values for all optional order parameters:
+
+```typescript
+export const DefaultOrderParams: OrderParams = {
+  orderType: OrderType.MARKET,
+  marketType: MarketType.PERP,
+  userOrderId: 0,
+  direction: PositionDirection.LONG,
+  baseAssetAmount: ZERO,
+  price: ZERO,
+  marketIndex: 0,
+  reduceOnly: false,
+  postOnly: PostOnlyParams.NONE,
+  bitFlags: 0,
+  triggerPrice: null,
+  triggerCondition: OrderTriggerCondition.ABOVE,
+  oraclePriceOffset: null,
+  auctionDuration: null,
+  maxTs: null,
+  auctionStartPrice: null,
+  auctionEndPrice: null,
+};
+```
+
+## Related Types
+
+### OptionalOrderParams
+
+All fields from OrderParams are optional except:
+- `orderType`
+- `marketIndex`
+- `baseAssetAmount`
+- `direction`
+
+### ModifyOrderParams
+
+Used for modifying existing orders. All OrderParams fields are optional and nullable, plus:
+
+<ParamField path="policy" type="ModifyOrderPolicy">
+  Policy for order modification.
+  
+  **ModifyOrderPolicy enum:**
+  - `ModifyOrderPolicy.MustModify` (1) - Transaction fails if order cannot be modified
+  - `ModifyOrderPolicy.ExcludePreviousFill` (2) - Exclude previously filled amount
+</ParamField>
+
+## See Also
+
+- [Position Management](/api/trading/position-management) - Calculate position metrics and PnL
+- [DLOB](/api/trading/dlob) - Decentralized Limit Order Book for order matching

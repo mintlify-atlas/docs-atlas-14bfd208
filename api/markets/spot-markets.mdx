@@ -1,0 +1,266 @@
+---
+title: Spot Markets
+description: Access spot market accounts and data in Drift Protocol v2
+---
+
+Spot markets represent depositable and borrowable assets in Drift Protocol. Each spot market has its own account containing market configuration, interest rate parameters, and deposit/borrow data.
+
+## Get Spot Market Account
+
+Retrieve a spot market account by its market index:
+
+```typescript
+const marketIndex = 0; // USDC
+const spotMarket = driftClient.getSpotMarketAccount(marketIndex);
+```
+
+### Force Fetch from RPC
+
+Force a fetch from RPC before returning the account (useful for testing):
+
+```typescript
+const spotMarket = await driftClient.forceGetSpotMarketAccount(marketIndex);
+```
+
+## Get All Spot Markets
+
+Retrieve all spot market accounts:
+
+```typescript
+const allSpotMarkets = driftClient.getSpotMarketAccounts();
+```
+
+## Get Quote Spot Market
+
+The quote spot market (USDC, index 0) is commonly used:
+
+```typescript
+const quoteMarket = driftClient.getQuoteSpotMarketAccount();
+```
+
+## SpotMarketAccount Structure
+
+The `SpotMarketAccount` type contains all data for a spot market.
+
+<ResponseField name="marketIndex" type="number" required>
+  The unique identifier for this spot market
+</ResponseField>
+
+<ResponseField name="pubkey" type="PublicKey" required>
+  The on-chain address of this market account
+</ResponseField>
+
+<ResponseField name="status" type="MarketStatus" required>
+  Current status of the market (e.g., active, paused, delisted)
+</ResponseField>
+
+<ResponseField name="assetTier" type="AssetTier" required>
+  Asset tier classification: collateral, protected, cross, isolated, or unlisted
+</ResponseField>
+
+<ResponseField name="name" type="number[]" required>
+  Market name as byte array (use `decodeName()` to convert to string)
+</ResponseField>
+
+<ResponseField name="mint" type="PublicKey" required>
+  SPL token mint address for this market
+</ResponseField>
+
+<ResponseField name="vault" type="PublicKey" required>
+  Vault account holding the market's token balance
+</ResponseField>
+
+<ResponseField name="oracle" type="PublicKey" required>
+  Oracle account providing price data
+</ResponseField>
+
+<ResponseField name="oracleSource" type="OracleSource" required>
+  Oracle source type (Pyth, Switchboard, etc.)
+</ResponseField>
+
+<ResponseField name="decimals" type="number" required>
+  Token decimals for this market
+</ResponseField>
+
+<ResponseField name="initialAssetWeight" type="number" required>
+  Asset weight for initial margin calculations (in margin precision 10000)
+</ResponseField>
+
+<ResponseField name="maintenanceAssetWeight" type="number" required>
+  Asset weight for maintenance margin calculations (in margin precision 10000)
+</ResponseField>
+
+<ResponseField name="initialLiabilityWeight" type="number" required>
+  Liability weight for initial margin calculations (in margin precision 10000)
+</ResponseField>
+
+<ResponseField name="maintenanceLiabilityWeight" type="number" required>
+  Liability weight for maintenance margin calculations (in margin precision 10000)
+</ResponseField>
+
+<ResponseField name="imfFactor" type="number" required>
+  Initial margin fraction factor for size-based margin increases
+</ResponseField>
+
+<ResponseField name="liquidatorFee" type="number" required>
+  Fee paid to liquidators (in percentage precision)
+</ResponseField>
+
+<ResponseField name="ifLiquidationFee" type="number" required>
+  Fee paid to insurance fund during liquidations
+</ResponseField>
+
+<ResponseField name="depositBalance" type="BN" required>
+  Total scaled deposit balance across all users
+</ResponseField>
+
+<ResponseField name="borrowBalance" type="BN" required>
+  Total scaled borrow balance across all users
+</ResponseField>
+
+<ResponseField name="cumulativeDepositInterest" type="BN" required>
+  Cumulative deposit interest multiplier
+</ResponseField>
+
+<ResponseField name="cumulativeBorrowInterest" type="BN" required>
+  Cumulative borrow interest multiplier
+</ResponseField>
+
+<ResponseField name="optimalUtilization" type="number" required>
+  Target utilization rate for optimal interest rates
+</ResponseField>
+
+<ResponseField name="optimalBorrowRate" type="number" required>
+  Interest rate at optimal utilization
+</ResponseField>
+
+<ResponseField name="maxBorrowRate" type="number" required>
+  Maximum borrow interest rate
+</ResponseField>
+
+<ResponseField name="minBorrowRate" type="number" required>
+  Minimum borrow interest rate
+</ResponseField>
+
+<ResponseField name="maxTokenDeposits" type="BN" required>
+  Maximum token deposits allowed (0 = unlimited)
+</ResponseField>
+
+<ResponseField name="maxTokenBorrowsFraction" type="number" required>
+  Maximum borrow fraction relative to deposits
+</ResponseField>
+
+<ResponseField name="scaleInitialAssetWeightStart" type="BN" required>
+  Deposit size where asset weight scaling begins
+</ResponseField>
+
+<ResponseField name="insuranceFund" type="object" required>
+  Insurance fund information for this market
+  <Expandable title="Insurance fund fields">
+    <ResponseField name="vault" type="PublicKey">
+      Insurance fund vault address
+    </ResponseField>
+    <ResponseField name="totalShares" type="BN">
+      Total insurance fund shares
+    </ResponseField>
+    <ResponseField name="userShares" type="BN">
+      User shares in insurance fund
+    </ResponseField>
+    <ResponseField name="sharesBase" type="BN">
+      Base shares amount
+    </ResponseField>
+    <ResponseField name="unstakingPeriod" type="BN">
+      Time required to unstake from insurance fund
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="historicalOracleData" type="HistoricalOracleData" required>
+  Historical oracle price data and TWAP values
+</ResponseField>
+
+<ResponseField name="historicalIndexData" type="HistoricalIndexData" required>
+  Historical index price bid/ask data
+</ResponseField>
+
+<ResponseField name="orderStepSize" type="BN" required>
+  Minimum order size increment
+</ResponseField>
+
+<ResponseField name="orderTickSize" type="BN" required>
+  Minimum price increment
+</ResponseField>
+
+<ResponseField name="minOrderSize" type="BN" required>
+  Minimum order size
+</ResponseField>
+
+<ResponseField name="maxPositionSize" type="BN" required>
+  Maximum position size allowed
+</ResponseField>
+
+## Calculate Token Amount
+
+Convert scaled balance to token amount:
+
+```typescript
+import { getTokenAmount, SpotBalanceType } from '@drift-labs/sdk';
+
+const scaledBalance = user.spotPositions[0].scaledBalance;
+const spotMarket = driftClient.getSpotMarketAccount(0);
+
+const tokenAmount = getTokenAmount(
+  scaledBalance,
+  spotMarket,
+  SpotBalanceType.DEPOSIT
+);
+
+console.log('Token amount:', tokenAmount.toString());
+```
+
+## Calculate Spot Market Margin
+
+Calculate margin requirements for a spot position:
+
+```typescript
+import { 
+  calculateSpotMarketMarginRatio,
+  castNumberToSpotPrecision,
+  SpotBalanceType
+} from '@drift-labs/sdk';
+
+const size = castNumberToSpotPrecision(100, spotMarket); // 100 tokens
+const oraclePrice = PRICE_PRECISION.muln(30); // $30
+const marginCategory = 'Initial'; // or 'Maintenance'
+
+const marginRatio = calculateSpotMarketMarginRatio(
+  spotMarket,
+  oraclePrice,
+  marginCategory,
+  size,
+  SpotBalanceType.DEPOSIT
+);
+
+console.log('Margin ratio:', marginRatio);
+```
+
+## Calculate Maximum Deposit
+
+Calculate remaining deposit capacity:
+
+```typescript
+import { calculateMaxRemainingDeposit } from '@drift-labs/sdk';
+
+const maxRemaining = calculateMaxRemainingDeposit(spotMarket);
+
+if (maxRemaining.eq(ZERO)) {
+  console.log('No deposit limit set');
+} else {
+  console.log('Remaining capacity:', maxRemaining.toString());
+}
+```
+
+## Related Types
+
+- [Oracle Price Data](/api/markets/oracles)
+- [User Spot Positions](/api/user/positions)

@@ -1,0 +1,67 @@
+---
+title: User Instructions
+description: User account management instructions in Drift Protocol
+---
+
+User instructions handle account creation, collateral management, and user settings.
+
+## Core Instructions
+
+### initialize_user
+
+Creates a new user trading account.
+
+```rust
+pub fn initialize_user(
+    ctx: Context<InitializeUser>,
+    sub_account_id: u16,
+    name: [u8; 32],
+) -> Result<()>
+```
+
+<ParamField path="sub_account_id" type="u16" required>
+  Sub-account ID (0-9999) for portfolio segregation
+</ParamField>
+
+<ParamField path="name" type="[u8; 32]" required>
+  User account name (32 bytes)
+</ParamField>
+
+### deposit
+
+Deposits collateral into user account.
+
+```rust
+pub fn deposit(
+    ctx: Context<Deposit>,
+    market_index: u16,
+    amount: u64,
+    reduce_only: bool,
+) -> Result<()>
+```
+
+### withdraw
+
+Withdraws collateral from user account.
+
+```rust
+pub fn withdraw(
+    ctx: Context<Withdraw>,
+    market_index: u16,
+    amount: u64,
+    reduce_only: bool,
+) -> Result<()>
+```
+
+## SDK Usage
+
+See the SDK guides for TypeScript usage:
+
+<CardGroup cols={2}>
+  <Card title="Account Management" href="/guides/account-management">
+    Create and manage accounts
+  </Card>
+  <Card title="DriftClient API" href="/api/drift-client">
+    Client methods
+  </Card>
+</CardGroup>

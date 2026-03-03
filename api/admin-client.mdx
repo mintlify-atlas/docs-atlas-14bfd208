@@ -1,0 +1,628 @@
+---
+title: 'AdminClient'
+description: 'Administrative functions for managing Drift Protocol v2'
+---
+
+# AdminClient
+
+The `AdminClient` class extends `DriftClient` to provide administrative functions for managing Drift Protocol. It includes methods for initializing markets, updating protocol parameters, and managing market configurations.
+
+<Note>
+  The AdminClient requires the connected wallet to be the protocol admin. Most users should use `DriftClient` instead.
+</Note>
+
+## Extends
+
+`AdminClient` extends `DriftClient`, inheriting all methods and properties.
+
+## Protocol Initialization
+
+### initialize
+
+Initializes the Drift Protocol state account.
+
+```typescript
+await adminClient.initialize(
+  usdcMint: PublicKey,
+  adminControlsPrices: boolean
+): Promise<[TransactionSignature]>
+```
+
+<ParamField path="usdcMint" type="PublicKey" required>
+  USDC mint public key
+</ParamField>
+
+<ParamField path="adminControlsPrices" type="boolean" required>
+  Whether admin controls oracle prices
+</ParamField>
+
+<ResponseField name="return" type="Promise<[TransactionSignature]>">
+  Transaction signature in array format
+</ResponseField>
+
+## Perpetual Market Management
+
+### initializePerpMarket
+
+Initializes a new perpetual market.
+
+```typescript
+await adminClient.initializePerpMarket(
+  marketIndex: number,
+  priceOracle: PublicKey,
+  baseAssetReserve: BN,
+  quoteAssetReserve: BN,
+  periodicity: BN,
+  pegMultiplier?: BN,
+  oracleSource?: OracleSource,
+  contractTier?: ContractTier,
+  marginRatioInitial?: number,
+  marginRatioMaintenance?: number,
+  liquidatorFee?: number,
+  ifLiquidatorFee?: number,
+  imfFactor?: number,
+  activeStatus?: boolean,
+  baseSpread?: number,
+  maxSpread?: number,
+  maxOpenInterest?: BN,
+  maxRevenueWithdrawPerPeriod?: BN,
+  quoteMaxInsurance?: BN,
+  orderStepSize?: BN,
+  orderTickSize?: BN,
+  minOrderSize?: BN,
+  concentrationCoefScale?: BN,
+  curveUpdateIntensity?: number,
+  ammJitIntensity?: number,
+  name?: string,
+  lpPoolId?: number
+): Promise<TransactionSignature>
+```
+
+<ParamField path="marketIndex" type="number" required>
+  Market index for the new perpetual market
+</ParamField>
+
+<ParamField path="priceOracle" type="PublicKey" required>
+  Oracle account public key
+</ParamField>
+
+<ParamField path="baseAssetReserve" type="BN" required>
+  Initial base asset reserve for the AMM
+</ParamField>
+
+<ParamField path="quoteAssetReserve" type="BN" required>
+  Initial quote asset reserve for the AMM
+</ParamField>
+
+<ParamField path="periodicity" type="BN" required>
+  Funding rate update periodicity
+</ParamField>
+
+<ParamField path="pegMultiplier" type="BN" default="PEG_PRECISION">
+  Peg multiplier for the market
+</ParamField>
+
+<ParamField path="oracleSource" type="OracleSource" default="OracleSource.PYTH">
+  Oracle source type
+</ParamField>
+
+<ParamField path="contractTier" type="ContractTier" default="ContractTier.SPECULATIVE">
+  Contract tier classification
+</ParamField>
+
+<ParamField path="marginRatioInitial" type="number" default={2000}>
+  Initial margin ratio (in basis points)
+</ParamField>
+
+<ParamField path="marginRatioMaintenance" type="number" default={500}>
+  Maintenance margin ratio (in basis points)
+</ParamField>
+
+<ParamField path="name" type="string" default="DEFAULT_MARKET_NAME">
+  Market name
+</ParamField>
+
+<ResponseField name="return" type="Promise<TransactionSignature>">
+  Transaction signature
+</ResponseField>
+
+### deletePerpMarket
+
+Deletes an initialized but unused perpetual market.
+
+```typescript
+await adminClient.deleteInitializedPerpMarket(
+  marketIndex: number
+): Promise<TransactionSignature>
+```
+
+<ParamField path="marketIndex" type="number" required>
+  Market index to delete
+</ParamField>
+
+<ResponseField name="return" type="Promise<TransactionSignature>">
+  Transaction signature
+</ResponseField>
+
+### updatePerpMarketMarginRatio
+
+Updates margin ratios for a perpetual market.
+
+```typescript
+await adminClient.updatePerpMarketMarginRatio(
+  perpMarketIndex: number,
+  marginRatioInitial: number,
+  marginRatioMaintenance: number
+): Promise<TransactionSignature>
+```
+
+<ParamField path="perpMarketIndex" type="number" required>
+  Perpetual market index
+</ParamField>
+
+<ParamField path="marginRatioInitial" type="number" required>
+  New initial margin ratio
+</ParamField>
+
+<ParamField path="marginRatioMaintenance" type="number" required>
+  New maintenance margin ratio
+</ParamField>
+
+<ResponseField name="return" type="Promise<TransactionSignature>">
+  Transaction signature
+</ResponseField>
+
+### updatePerpMarketBaseSpread
+
+Updates the base spread for a perpetual market.
+
+```typescript
+await adminClient.updatePerpMarketBaseSpread(
+  perpMarketIndex: number,
+  baseSpread: number
+): Promise<TransactionSignature>
+```
+
+<ParamField path="perpMarketIndex" type="number" required>
+  Perpetual market index
+</ParamField>
+
+<ParamField path="baseSpread" type="number" required>
+  New base spread value
+</ParamField>
+
+<ResponseField name="return" type="Promise<TransactionSignature>">
+  Transaction signature
+</ResponseField>
+
+### updatePerpMarketOracle
+
+Updates the oracle for a perpetual market.
+
+```typescript
+await adminClient.updatePerpMarketOracle(
+  perpMarketIndex: number,
+  oracle: PublicKey,
+  oracleSource: OracleSource,
+  skipInvaraintCheck?: boolean
+): Promise<TransactionSignature>
+```
+
+<ParamField path="perpMarketIndex" type="number" required>
+  Perpetual market index
+</ParamField>
+
+<ParamField path="oracle" type="PublicKey" required>
+  New oracle account public key
+</ParamField>
+
+<ParamField path="oracleSource" type="OracleSource" required>
+  Oracle source type
+</ParamField>
+
+<ParamField path="skipInvaraintCheck" type="boolean" default={false}>
+  Skip invariant validation checks
+</ParamField>
+
+<ResponseField name="return" type="Promise<TransactionSignature>">
+  Transaction signature
+</ResponseField>
+
+## Spot Market Management
+
+### initializeSpotMarket
+
+Initializes a new spot market.
+
+```typescript
+await adminClient.initializeSpotMarket(
+  mint: PublicKey,
+  optimalUtilization: number,
+  optimalRate: number,
+  maxRate: number,
+  oracle: PublicKey,
+  oracleSource: OracleSource,
+  initialAssetWeight: number,
+  maintenanceAssetWeight: number,
+  initialLiabilityWeight: number,
+  maintenanceLiabilityWeight: number,
+  imfFactor?: number,
+  liquidatorFee?: number,
+  ifLiquidationFee?: number,
+  activeStatus?: boolean,
+  assetTier?: AssetTier,
+  scaleInitialAssetWeightStart?: BN,
+  withdrawGuardThreshold?: BN,
+  orderTickSize?: BN,
+  orderStepSize?: BN,
+  ifTotalFactor?: number,
+  name?: string,
+  marketIndex?: number
+): Promise<TransactionSignature>
+```
+
+<ParamField path="mint" type="PublicKey" required>
+  Token mint public key
+</ParamField>
+
+<ParamField path="optimalUtilization" type="number" required>
+  Optimal utilization rate for interest
+</ParamField>
+
+<ParamField path="optimalRate" type="number" required>
+  Interest rate at optimal utilization
+</ParamField>
+
+<ParamField path="maxRate" type="number" required>
+  Maximum interest rate
+</ParamField>
+
+<ParamField path="oracle" type="PublicKey" required>
+  Oracle account public key
+</ParamField>
+
+<ParamField path="oracleSource" type="OracleSource" required>
+  Oracle source type
+</ParamField>
+
+<ParamField path="initialAssetWeight" type="number" required>
+  Initial asset weight for collateral
+</ParamField>
+
+<ParamField path="maintenanceAssetWeight" type="number" required>
+  Maintenance asset weight for collateral
+</ParamField>
+
+<ParamField path="initialLiabilityWeight" type="number" required>
+  Initial liability weight for borrows
+</ParamField>
+
+<ParamField path="maintenanceLiabilityWeight" type="number" required>
+  Maintenance liability weight for borrows
+</ParamField>
+
+<ParamField path="assetTier" type="AssetTier" default="AssetTier.COLLATERAL">
+  Asset tier classification
+</ParamField>
+
+<ParamField path="name" type="string" default="DEFAULT_MARKET_NAME">
+  Market name
+</ParamField>
+
+<ResponseField name="return" type="Promise<TransactionSignature>">
+  Transaction signature
+</ResponseField>
+
+### deleteSpotMarket
+
+Deletes an initialized but unused spot market.
+
+```typescript
+await adminClient.deleteInitializedSpotMarket(
+  marketIndex: number
+): Promise<TransactionSignature>
+```
+
+<ParamField path="marketIndex" type="number" required>
+  Spot market index to delete
+</ParamField>
+
+<ResponseField name="return" type="Promise<TransactionSignature>">
+  Transaction signature
+</ResponseField>
+
+### updateSpotMarketOracle
+
+Updates the oracle for a spot market.
+
+```typescript
+await adminClient.updateSpotMarketOracle(
+  spotMarketIndex: number,
+  oracle: PublicKey,
+  oracleSource: OracleSource
+): Promise<TransactionSignature>
+```
+
+<ParamField path="spotMarketIndex" type="number" required>
+  Spot market index
+</ParamField>
+
+<ParamField path="oracle" type="PublicKey" required>
+  New oracle account public key
+</ParamField>
+
+<ParamField path="oracleSource" type="OracleSource" required>
+  Oracle source type
+</ParamField>
+
+<ResponseField name="return" type="Promise<TransactionSignature>">
+  Transaction signature
+</ResponseField>
+
+## AMM Management
+
+### moveAmmPrice
+
+Moves the AMM price to new reserve values.
+
+```typescript
+await adminClient.moveAmmPrice(
+  perpMarketIndex: number,
+  baseAssetReserve: BN,
+  quoteAssetReserve: BN,
+  sqrtK?: BN
+): Promise<TransactionSignature>
+```
+
+<ParamField path="perpMarketIndex" type="number" required>
+  Perpetual market index
+</ParamField>
+
+<ParamField path="baseAssetReserve" type="BN" required>
+  New base asset reserve
+</ParamField>
+
+<ParamField path="quoteAssetReserve" type="BN" required>
+  New quote asset reserve
+</ParamField>
+
+<ParamField path="sqrtK" type="BN">
+  Square root of k (auto-calculated if not provided)
+</ParamField>
+
+<ResponseField name="return" type="Promise<TransactionSignature>">
+  Transaction signature
+</ResponseField>
+
+### repegAmmCurve
+
+Repegs the AMM curve to a new peg multiplier.
+
+```typescript
+await adminClient.repegAmmCurve(
+  newPeg: BN,
+  perpMarketIndex: number
+): Promise<TransactionSignature>
+```
+
+<ParamField path="newPeg" type="BN" required>
+  New peg multiplier
+</ParamField>
+
+<ParamField path="perpMarketIndex" type="number" required>
+  Perpetual market index
+</ParamField>
+
+<ResponseField name="return" type="Promise<TransactionSignature>">
+  Transaction signature
+</ResponseField>
+
+### updateK
+
+Updates the k parameter for an AMM.
+
+```typescript
+await adminClient.updateK(
+  perpMarketIndex: number,
+  sqrtK: BN
+): Promise<TransactionSignature>
+```
+
+<ParamField path="perpMarketIndex" type="number" required>
+  Perpetual market index
+</ParamField>
+
+<ParamField path="sqrtK" type="BN" required>
+  New square root of k value
+</ParamField>
+
+<ResponseField name="return" type="Promise<TransactionSignature>">
+  Transaction signature
+</ResponseField>
+
+## Fee Structure Management
+
+### updatePerpFeeStructure
+
+Updates the perpetual market fee structure.
+
+```typescript
+await adminClient.updatePerpFeeStructure(
+  feeStructure: FeeStructure
+): Promise<TransactionSignature>
+```
+
+<ParamField path="feeStructure" type="FeeStructure" required>
+  New fee structure configuration
+  
+  <Expandable title="properties">
+    <ParamField path="feeTiers" type="FeeTier[]" required>
+      Array of fee tiers
+    </ParamField>
+    <ParamField path="fillerRewardStructure" type="OrderFillerRewardStructure" required>
+      Filler reward configuration
+    </ParamField>
+    <ParamField path="referrerRewardEpochUpperBound" type="BN" required>
+      Upper bound for referrer rewards
+    </ParamField>
+    <ParamField path="flatFillerFee" type="BN" required>
+      Flat filler fee amount
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="return" type="Promise<TransactionSignature>">
+  Transaction signature
+</ResponseField>
+
+### updateSpotFeeStructure
+
+Updates the spot market fee structure.
+
+```typescript
+await adminClient.updateSpotFeeStructure(
+  feeStructure: FeeStructure
+): Promise<TransactionSignature>
+```
+
+<ParamField path="feeStructure" type="FeeStructure" required>
+  New fee structure configuration
+</ParamField>
+
+<ResponseField name="return" type="Promise<TransactionSignature>">
+  Transaction signature
+</ResponseField>
+
+## State Parameter Updates
+
+### updateAdmin
+
+Transfers admin authority to a new address.
+
+```typescript
+await adminClient.updateAdmin(
+  admin: PublicKey
+): Promise<TransactionSignature>
+```
+
+<ParamField path="admin" type="PublicKey" required>
+  New admin public key
+</ParamField>
+
+<ResponseField name="return" type="Promise<TransactionSignature>">
+  Transaction signature
+</ResponseField>
+
+### updateOracleGuardRails
+
+Updates oracle guard rails for price validation.
+
+```typescript
+await adminClient.updateOracleGuardRails(
+  oracleGuardRails: OracleGuardRails
+): Promise<TransactionSignature>
+```
+
+<ParamField path="oracleGuardRails" type="OracleGuardRails" required>
+  New oracle guard rail configuration
+  
+  <Expandable title="properties">
+    <ParamField path="priceDivergence" type="object" required>
+      Price divergence parameters
+    </ParamField>
+    <ParamField path="validity" type="object" required>
+      Oracle validity parameters
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="return" type="Promise<TransactionSignature>">
+  Transaction signature
+</ResponseField>
+
+### updateLiquidationDuration
+
+Updates the liquidation duration parameter.
+
+```typescript
+await adminClient.updateLiquidationDuration(
+  liquidationDuration: number
+): Promise<TransactionSignature>
+```
+
+<ParamField path="liquidationDuration" type="number" required>
+  New liquidation duration in seconds
+</ParamField>
+
+<ResponseField name="return" type="Promise<TransactionSignature>">
+  Transaction signature
+</ResponseField>
+
+## Usage Example
+
+```typescript
+import { AdminClient } from '@drift-labs/sdk';
+import { Connection, PublicKey } from '@solana/web3.js';
+import { BN } from '@coral-xyz/anchor';
+
+// Initialize admin client
+const connection = new Connection('https://api.mainnet-beta.solana.com');
+const adminClient = new AdminClient({
+  connection,
+  wallet: adminWallet,
+  env: 'mainnet-beta',
+});
+
+await adminClient.subscribe();
+
+// Initialize a new perpetual market
+const marketIndex = 10;
+const oracle = new PublicKey('...');
+const baseAssetReserve = new BN(100_000_000_000); // 100 SOL
+const quoteAssetReserve = new BN(10_000_000_000); // 10,000 USDC
+const periodicity = new BN(3600); // 1 hour
+
+await adminClient.initializePerpMarket(
+  marketIndex,
+  oracle,
+  baseAssetReserve,
+  quoteAssetReserve,
+  periodicity,
+  undefined, // default peg
+  OracleSource.PYTH,
+  ContractTier.A,
+  2000, // 20% initial margin
+  500,  // 5% maintenance margin
+  0,
+  10000,
+  0,
+  true,
+  100,
+  142500,
+  undefined,
+  undefined,
+  undefined,
+  undefined,
+  undefined,
+  undefined,
+  undefined,
+  0,
+  0,
+  'BTC-PERP'
+);
+
+// Update market parameters
+await adminClient.updatePerpMarketMarginRatio(
+  marketIndex,
+  1500, // 15% initial margin
+  400   // 4% maintenance margin
+);
+
+// Update base spread
+await adminClient.updatePerpMarketBaseSpread(
+  marketIndex,
+  50 // 0.5 bps
+);
+
+await adminClient.unsubscribe();
+```

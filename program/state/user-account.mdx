@@ -1,0 +1,71 @@
+---
+title: User Account
+description: User account structure in Drift Protocol
+---
+
+The User account stores all trading data for a user including positions, orders, and collateral.
+
+## Account Structure
+
+The UserAccount is defined in `programs/drift/src/state/user.rs`.
+
+### Key Fields
+
+<ResponseField name="authority" type="Pubkey">
+  Wallet public key that controls this account
+</ResponseField>
+
+<ResponseField name="subAccountId" type="u16">
+  Sub-account ID (0-9999)
+</ResponseField>
+
+<ResponseField name="perpPositions" type="PerpPosition[8]">
+  Array of up to 8 perpetual positions
+</ResponseField>
+
+<ResponseField name="spotPositions" type="SpotPosition[8]">
+  Array of up to 8 spot positions (collateral)
+</ResponseField>
+
+<ResponseField name="orders" type="Order[32]">
+  Array of up to 32 active orders
+</ResponseField>
+
+<ResponseField name="settledPerpPnl" type="i64">
+  Settled perpetual PnL
+</ResponseField>
+
+<ResponseField name="cumulativePerpFunding" type="i64">
+  Cumulative funding payments
+</ResponseField>
+
+<ResponseField name="nextOrderId" type="u32">
+  Next order ID to assign
+</ResponseField>
+
+<ResponseField name="maxMarginRatio" type="u32">
+  Custom maximum margin ratio
+</ResponseField>
+
+<ResponseField name="isMarginTradingEnabled" type="bool">
+  Whether margin trading is enabled
+</ResponseField>
+
+## TypeScript Types
+
+For TypeScript SDK usage, see:
+
+<CardGroup cols={2}>
+  <Card title="UserAccount Type" href="/api/types/accounts">
+    Full TypeScript interface
+  </Card>
+  <Card title="User API" href="/api/user">
+    User class methods
+  </Card>
+  <Card title="Account Management" href="/guides/account-management">
+    Create and manage accounts
+  </Card>
+  <Card title="Position Management" href="/guides/managing-positions">
+    Work with positions
+  </Card>
+</CardGroup>

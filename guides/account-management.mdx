@@ -1,0 +1,363 @@
+---
+title: Account Management
+description: Create and manage Drift user accounts
+---
+
+Drift user accounts hold your positions, orders, and collateral. Before trading, you need to create a user account and deposit collateral.
+
+## User Account Structure
+
+Each user account contains:
+- **Positions**: Up to 8 perpetual and 8 spot positions
+- **Orders**: Up to 32 active orders
+- **Collateral**: Spot balances used as margin
+- **Sub-account ID**: Support for multiple sub-accounts (0-9999)
+
+## Creating a User Account
+
+<Steps>
+  <Step title="Check if Account Exists">
+    ```typescript
+    import { DriftClient } from '@drift-labs/sdk';
+
+    // Get the user account public key
+    const userAccountPublicKey = await driftClient.getUserAccountPublicKey();
+
+    // Check if it exists
+    const accountInfo = await driftClient.connection.getAccountInfo(
+      userAccountPublicKey
+    );
+    const accountExists = accountInfo !== null;
+
+    console.log('Account exists:', accountExists);
+    ```
+  </Step>
+
+  <Step title="Initialize User Account">
+    ```typescript
+    import { DEFAULT_USER_NAME } from '@drift-labs/sdk';
+
+    if (!accountExists) {
+      // Create a new user account (sub-account 0)
+      const txSig = await driftClient.initializeUserAccount(
+        0, // sub-account ID
+        DEFAULT_USER_NAME // optional name
+      );
+      
+      console.log('User account created:', txSig);
+    }
+    ```
+  </Step>
+
+  <Step title="Deposit Collateral">
+    ```typescript
+    import { BN } from '@coral-xyz/anchor';
+    import { QUOTE_PRECISION } from '@drift-labs/sdk';
+
+    // Deposit $1000 USDC (USDC has 6 decimals = QUOTE_PRECISION)
+    const depositAmount = new BN(1000).mul(QUOTE_PRECISION);
+    
+    const txSig = await driftClient.deposit(
+      depositAmount,
+      0, // spot market index (0 = USDC)
+      await driftClient.getAssociatedTokenAccount(0) // your USDC token account
+    );
+
+    console.log('Deposited 1000 USDC:', txSig);
+    ```
+  </Step>
+</Steps>
+
+## Initialize and Deposit in One Transaction
+
+For first-time users, combine account initialization and deposit:
+
+```typescript
+import { BN } from '@coral-xyz/anchor';
+import { QUOTE_PRECISION } from '@drift-labs/sdk';
+
+// Initialize account and deposit in a single transaction
+const depositAmount = new BN(1000).mul(QUOTE_PRECISION);
+const userAccountPublicKey = await driftClient.getUserAccountPublicKey();
+
+const txSig = await driftClient.initializeUserAccountAndDepositCollateral(
+  depositAmount,
+  await driftClient.getAssociatedTokenAccount(0), // USDC token account
+  0, // spot market index
+  0, // sub-account ID
+  DEFAULT_USER_NAME
+);
+
+console.log('Account initialized and funded:', txSig);
+```
+
+## Working with User Class
+
+The `User` class provides a high-level interface for account data:
+
+```typescript
+import { User, BulkAccountLoader } from '@drift-labs/sdk';
+
+// Create User instance
+const user = new User({
+  driftClient: driftClient,
+  userAccountPublicKey: await driftClient.getUserAccountPublicKey(),
+  accountSubscription: {
+    type: 'polling',
+    accountLoader: bulkAccountLoader,
+  },
+});
+
+// Subscribe to user account updates
+await user.subscribe();
+
+// Get account data
+const userAccount = user.getUserAccount();
+console.log('Authority:', userAccount.authority.toBase58());
+console.log('Sub-account ID:', userAccount.subAccountId);
+console.log('Open orders:', userAccount.nextOrderId);
+```
+
+## Sub-Accounts
+
+Drift supports multiple sub-accounts per wallet for portfolio segregation:
+
+```typescript
+// Create sub-account 1
+await driftClient.initializeUserAccount(1, DEFAULT_USER_NAME);
+
+// Switch active sub-account
+await driftClient.switchActiveUser(1);
+
+// Get sub-account 1 public key
+const subAccount1 = await driftClient.getUserAccountPublicKey(1);
+
+// Create User instance for specific sub-account
+const user1 = new User({
+  driftClient,
+  userAccountPublicKey: subAccount1,
+  accountSubscription: {
+    type: 'polling',
+    accountLoader: bulkAccountLoader,
+  },
+});
+```
+
+<Info>
+  Sub-accounts are useful for:
+  - Separating strategies (e.g., hedging vs directional)
+  - Risk isolation
+  - Testing new strategies with limited capital
+  - Different leverage profiles
+</Info>
+
+## Depositing Collateral
+
+### Deposit USDC
+
+```typescript
+import { BN } from '@coral-xyz/anchor';
+import { QUOTE_PRECISION } from '@drift-labs/sdk';
+import { getAssociatedTokenAddress } from '@solana/spl-token';
+
+// Get your USDC token account
+const usdcMint = new PublicKey(sdkConfig.USDC_MINT_ADDRESS);
+const userUsdcAccount = await getAssociatedTokenAddress(
+  usdcMint,
+  driftClient.wallet.publicKey
+);
+
+// Deposit $500 USDC
+const amount = new BN(500).mul(QUOTE_PRECISION);
+await driftClient.deposit(
+  amount,
+  0, // USDC spot market index
+  userUsdcAccount
+);
+```
+
+### Deposit SOL
+
+```typescript
+import { BASE_PRECISION } from '@drift-labs/sdk';
+import { WRAPPED_SOL_MINT } from '@drift-labs/sdk';
+
+// Deposit 10 SOL
+const solAmount = new BN(10).mul(BASE_PRECISION);
+
+// SOL requires wrapping - SDK handles this automatically
+await driftClient.deposit(
+  solAmount,
+  1, // SOL spot market index
+  await getAssociatedTokenAddress(
+    WRAPPED_SOL_MINT,
+    driftClient.wallet.publicKey
+  )
+);
+```
+
+### Deposit Other Tokens
+
+```typescript
+// Check available spot markets
+const spotMarkets = driftClient.getSpotMarketAccounts();
+spotMarkets.forEach(market => {
+  console.log(
+    `Market ${market.marketIndex}:`,
+    market.name,
+    'Mint:',
+    market.mint.toBase58()
+  );
+});
+
+// Deposit to specific market
+const marketIndex = 2; // Example: BTC
+const spotMarket = driftClient.getSpotMarketAccount(marketIndex);
+const tokenAccount = await getAssociatedTokenAddress(
+  spotMarket.mint,
+  driftClient.wallet.publicKey
+);
+
+const depositAmount = new BN(1).mul(new BN(10).pow(new BN(spotMarket.decimals)));
+await driftClient.deposit(depositAmount, marketIndex, tokenAccount);
+```
+
+## Withdrawing Collateral
+
+```typescript
+import { BN } from '@coral-xyz/anchor';
+import { QUOTE_PRECISION } from '@drift-labs/sdk';
+
+// Withdraw $100 USDC
+const withdrawAmount = new BN(100).mul(QUOTE_PRECISION);
+
+const txSig = await driftClient.withdraw(
+  withdrawAmount,
+  0, // USDC market index
+  await getAssociatedTokenAddress(
+    usdcMint,
+    driftClient.wallet.publicKey
+  )
+);
+
+console.log('Withdrawn:', txSig);
+```
+
+<Warning>
+  You can only withdraw excess collateral. The withdrawal will fail if it would put your account below the maintenance margin requirement.
+</Warning>
+
+### Check Available Collateral
+
+```typescript
+const freeCollateral = user.getFreeCollateral();
+const totalCollateral = user.getTotalCollateral();
+const marginRequirement = user.getMaintenanceMarginRequirement();
+
+console.log('Free collateral:', freeCollateral.toString());
+console.log('Total collateral:', totalCollateral.toString());
+console.log('Margin requirement:', marginRequirement.toString());
+
+// Check if withdrawal is possible
+const maxWithdraw = freeCollateral.gt(ZERO) ? freeCollateral : ZERO;
+console.log('Max withdrawal:', maxWithdraw.toString());
+```
+
+## Account Status and Health
+
+```typescript
+// Get account health metrics
+const leverage = user.getLeverage();
+const marginRatio = user.getMarginRatio();
+const health = user.getHealth();
+
+console.log('Leverage:', leverage.toString());
+console.log('Margin ratio:', marginRatio.toString());
+console.log('Health:', health.toString());
+
+// Check liquidation status
+const canBeLiquidated = user.canBeLiquidated();
+if (canBeLiquidated) {
+  console.warn('⚠️ Account is below maintenance margin!');
+}
+
+// Get liquidation price for a position
+const perpPosition = user.getPerpPosition(0); // SOL-PERP
+if (perpPosition) {
+  const liqPrice = user.liquidationPrice(0, MarketType.PERP);
+  console.log('Liquidation price:', liqPrice?.toString());
+}
+```
+
+## Deleting a User Account
+
+<Warning>
+  You can only delete a user account if:
+  - All positions are closed
+  - All orders are cancelled
+  - All collateral is withdrawn
+</Warning>
+
+```typescript
+// Close all positions and withdraw all collateral first
+// Then delete the account
+await driftClient.deleteUser(0); // sub-account ID
+
+// This will reclaim the rent (≈0.035 SOL)
+```
+
+## Best Practices
+
+<Accordion title="Always check account status before operations">
+  ```typescript
+  const user = new User({ ... });
+  await user.subscribe();
+
+  // Check if account exists
+  const exists = await user.exists();
+  if (!exists) {
+    throw new Error('User account not initialized');
+  }
+
+  // Check health before trading
+  const health = user.getHealth();
+  if (health < 50) {
+    console.warn('Low account health!');
+  }
+  ```
+</Accordion>
+
+<Accordion title="Use sub-accounts for risk management">
+  Separate high-risk strategies into different sub-accounts to isolate risk and prevent cascading liquidations.
+</Accordion>
+
+<Accordion title="Monitor collateral ratios">
+  ```typescript
+  // Set up monitoring
+  user.eventEmitter.on('userAccountUpdate', (account) => {
+    const marginRatio = user.getMarginRatio();
+    
+    if (marginRatio.lt(new BN(2000))) { // < 20%
+      console.error('🚨 Low margin ratio!');
+      // Add collateral or reduce positions
+    }
+  });
+  ```
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Place Orders" icon="cart-shopping" href="/guides/placing-orders">
+    Start trading with your funded account
+  </Card>
+  <Card title="Manage Positions" icon="chart-line" href="/guides/managing-positions">
+    Monitor and close positions
+  </Card>
+  <Card title="User API" icon="code" href="/api/user">
+    Explore User class methods
+  </Card>
+  <Card title="Account Subscriptions" icon="signal-stream" href="/guides/account-subscriptions">
+    Real-time account updates
+  </Card>
+</CardGroup>

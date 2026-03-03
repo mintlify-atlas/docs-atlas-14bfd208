@@ -1,0 +1,209 @@
+---
+title: Market Making Bot
+description: Build a simple market making bot for Drift
+---
+
+This example demonstrates a basic market making strategy that quotes bid/ask orders around the oracle price.
+
+## Complete Example
+
+```typescript market-maker.ts
+import {
+  DriftClient,
+  User,
+  BulkAccountLoader,
+  getLimitOrderParams,
+  PositionDirection,
+  PostOnlyParams,
+  calculateBidAskPrice,
+  convertToNumber,
+  BASE_PRECISION,
+  PRICE_PRECISION,
+  QUOTE_PRECISION,
+  BN,
+} from '@drift-labs/sdk';
+
+class SimpleMarketMaker {
+  private driftClient: DriftClient;
+  private user: User;
+  private marketIndex: number;
+  private spreadBps: number; // Spread in basis points
+  private orderSize: BN;
+  
+  constructor(
+    driftClient: DriftClient,
+    user: User,
+    marketIndex: number,
+    spreadBps: number = 10, // 0.1%
+    orderSize: number = 1 // 1 SOL
+  ) {
+    this.driftClient = driftClient;
+    this.user = user;
+    this.marketIndex = marketIndex;
+    this.spreadBps = spreadBps;
+    this.orderSize = new BN(orderSize).mul(BASE_PRECISION);
+  }
+
+  async run() {
+    console.log('Market maker starting...');
+    
+    // Update quotes every 5 seconds
+    setInterval(async () => {
+      try {
+        await this.updateQuotes();
+      } catch (error) {
+        console.error('Error updating quotes:', error);
+      }
+    }, 5000);
+  }
+
+  async updateQuotes() {
+    // Get current market data
+    const perpMarket = this.driftClient.getPerpMarketAccount(this.marketIndex);
+    const oracleData = this.driftClient.getOracleDataForPerpMarket(this.marketIndex);
+    const oraclePrice = oracleData.price;
+
+    // Calculate bid/ask around oracle price
+    const spreadAmount = oraclePrice
+      .mul(new BN(this.spreadBps))
+      .div(new BN(10000));
+    
+    const bidPrice = oraclePrice.sub(spreadAmount);
+    const askPrice = oraclePrice.add(spreadAmount);
+
+    console.log('\nUpdating quotes:');
+    console.log('  Oracle:', convertToNumber(oraclePrice, PRICE_PRECISION));
+    console.log('  Bid:', convertToNumber(bidPrice, PRICE_PRECISION));
+    console.log('  Ask:', convertToNumber(askPrice, PRICE_PRECISION));
+
+    // Cancel existing orders
+    await this.driftClient.cancelOrders(
+      MarketType.PERP,
+      this.marketIndex
+    );
+
+    // Place new bid
+    const bidOrder = getLimitOrderParams({
+      marketIndex: this.marketIndex,
+      direction: PositionDirection.LONG,
+      baseAssetAmount: this.orderSize,
+      price: bidPrice,
+      postOnly: PostOnlyParams.MUST_POST_ONLY,
+    });
+
+    // Place new ask
+    const askOrder = getLimitOrderParams({
+      marketIndex: this.marketIndex,
+      direction: PositionDirection.SHORT,
+      baseAssetAmount: this.orderSize,
+      price: askPrice,
+      postOnly: PostOnlyParams.MUST_POST_ONLY,
+    });
+
+    // Place both orders
+    await this.driftClient.placeOrders([bidOrder, askOrder]);
+    console.log('  Orders placed');
+
+    // Check inventory
+    await this.checkInventory();
+  }
+
+  async checkInventory() {
+    const position = this.user.getPerpPosition(this.marketIndex);
+    
+    if (position) {
+      const size = convertToNumber(position.baseAssetAmount, BASE_PRECISION);
+      console.log('  Position size:', size);
+      
+      // Adjust quotes if inventory gets too large
+      if (Math.abs(size) > 10) {
+        console.warn('  ⚠️ Large inventory - consider adjusting');
+      }
+    }
+  }
+}
+
+// Run the market maker
+async function main() {
+  // Initialize DriftClient and User
+  const driftClient = await initializeDriftClient();
+  const user = await initializeUser(driftClient);
+
+  // Create market maker for SOL-PERP
+  const marketMaker = new SimpleMarketMaker(
+    driftClient,
+    user,
+    0, // SOL-PERP market index
+    10, // 0.1% spread
+    1 // 1 SOL per order
+  );
+
+  // Start market making
+  await marketMaker.run();
+}
+
+main().catch(console.error);
+```
+
+## Key Concepts
+
+<Accordion title="Post-only orders">
+  Use `PostOnlyParams.MUST_POST_ONLY` to ensure you always provide liquidity and earn maker fees.
+</Accordion>
+
+<Accordion title="Inventory management">
+  Monitor position size and adjust quotes or hedge when inventory gets too large.
+</Accordion>
+
+<Accordion title="Quote updates">
+  Update quotes frequently to stay competitive and adjust to market conditions.
+</Accordion>
+
+<Accordion title="Risk management">
+  Set position limits and stop-losses to manage risk.
+</Accordion>
+
+## Advanced Features
+
+### Dynamic Spreads
+
+```typescript
+// Adjust spread based on volatility
+const volatility = calculateVolatility(recentPrices);
+const dynamicSpread = baseSpread * (1 + volatility);
+```
+
+### Inventory Skewing
+
+```typescript
+// Skew quotes based on inventory
+const inventorySkew = position.baseAssetAmount
+  .mul(new BN(5))
+  .div(new BN(1000));
+
+const bidPrice = oraclePrice.sub(spreadAmount).sub(inventorySkew);
+const askPrice = oraclePrice.add(spreadAmount).sub(inventorySkew);
+```
+
+## Production Considerations
+
+- **Error handling**: Robust retry logic
+- **Monitoring**: Track fills, PnL, and position
+- **Risk limits**: Maximum position size
+- **Multiple markets**: Diversify across markets
+- **Gas optimization**: Batch operations
+
+<Info>
+  For production market making, see [keeper-bots-v2](https://github.com/drift-labs/keeper-bots-v2) for reference implementations.
+</Info>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Liquidation Bot" href="/examples/liquidation-bot">
+    Build a liquidation bot
+  </Card>
+  <Card title="Advanced Features" href="/guides/advanced-features">
+    Advanced SDK features
+  </Card>
+</CardGroup>

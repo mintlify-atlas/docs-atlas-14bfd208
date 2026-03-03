@@ -1,0 +1,400 @@
+---
+title: 'Oracles'
+description: 'Oracle integrations and price feed mechanics in Drift Protocol'
+---
+
+## Oracle Overview
+
+Drift Protocol relies on decentralized oracle networks to provide accurate, manipulation-resistant price feeds for all markets. Oracles are critical for:
+
+- Marking positions to market for PnL calculations
+- Calculating margin requirements and liquidation thresholds
+- Determining funding rates for perpetual markets
+- Validating order prices and preventing market manipulation
+
+## Supported Oracle Sources
+
+Drift supports multiple oracle providers:
+
+```typescript sdk/src/types.ts
+export class OracleSource {
+  static readonly PYTH = { pyth: {} };
+  static readonly PYTH_1K = { pyth1K: {} };
+  static readonly PYTH_1M = { pyth1M: {} };
+  static readonly PYTH_PULL = { pythPull: {} };
+  static readonly PYTH_1K_PULL = { pyth1KPull: {} };
+  static readonly PYTH_1M_PULL = { pyth1MPull: {} };
+  static readonly SWITCHBOARD = { switchboard: {} };
+  static readonly QUOTE_ASSET = { quoteAsset: {} };
+  static readonly PYTH_STABLE_COIN = { pythStableCoin: {} };
+  static readonly PYTH_STABLE_COIN_PULL = { pythStableCoinPull: {} };
+  static readonly Prelaunch = { prelaunch: {} };
+  static readonly SWITCHBOARD_ON_DEMAND = { switchboardOnDemand: {} };
+  static readonly PYTH_LAZER = { pythLazer: {} };
+  static readonly PYTH_LAZER_1K = { pythLazer1K: {} };
+  static readonly PYTH_LAZER_1M = { pythLazer1M: {} };
+  static readonly PYTH_LAZER_STABLE_COIN = { pythLazerStableCoin: {} };
+}
+```
+
+### Pyth Network
+
+Pyth is the primary oracle provider for Drift:
+
+- **High-frequency updates**: Sub-second price updates
+- **Confidence intervals**: Built-in uncertainty quantification
+- **Pull model**: Users submit price updates in transactions
+- **Push model**: Traditional on-chain price updates
+- **Multiple price feeds**: Standard, 1K precision, 1M precision for different asset types
+
+<Info>
+Pyth **Pull** oracles require the user to submit a price update in the same transaction as their trade. This ensures the latest price is always used.
+</Info>
+
+### Switchboard
+
+Switchboard provides decentralized oracle aggregation:
+
+- **On-demand**: Users can trigger updates when needed
+- **Aggregated data**: Multiple data sources combined
+- **Lower latency**: Fast price updates
+
+### Prelaunch Oracle
+
+For markets before official price feeds exist:
+
+```typescript sdk/src/types.ts
+export type PrelaunchOracle = {
+  price: BN;
+  maxPrice: BN;
+  confidence: BN;
+  ammLastUpdateSlot: BN;
+  lastUpdateSlot: BN;
+  perpMarketIndex: number;
+};
+```
+
+Admins can set and update prices for prelaunch markets.
+
+## Oracle Price Data
+
+Oracle data includes price, confidence, and timing information:
+
+```typescript
+export type OraclePriceData = {
+  price: BN;              // Current price
+  confidence: BN;         // Confidence interval
+  delay: BN;              // Age of the price data
+  hasSufficientNumberOfDataPoints: boolean;
+  maxPrice?: BN;          // Maximum valid price
+};
+```
+
+### MM Oracle Price Data
+
+For market making, additional data is included:
+
+```typescript
+export type MMOraclePriceData = OraclePriceData & {
+  slot: BN;               // Slot of price update
+  oracleSource: OracleSource;
+};
+```
+
+## Oracle Validity Checks
+
+The protocol validates oracle data before use:
+
+```typescript sdk/src/types.ts
+export enum OracleValidity {
+  NonPositive = 0,              // Price <= 0
+  TooVolatile = 1,              // Confidence too wide
+  TooUncertain = 2,             // Confidence interval too large
+  StaleForMargin = 3,           // Too old for margin calc
+  InsufficientDataPoints = 4,   // Not enough data sources
+  StaleForAMMLowRisk = 5,       // Too old for AMM operations
+  isStaleForAmmImmediate = 6,   // Too old for immediate fills
+  Valid = 7,                    // Valid for use
+}
+```
+
+### Validity Guard Rails
+
+The protocol enforces guard rails on oracle data:
+
+```typescript sdk/src/types.ts
+export type OracleGuardRails = {
+  priceDivergence: {
+    markOraclePercentDivergence: BN;      // Max mark-oracle divergence
+    oracleTwap5MinPercentDivergence: BN;  // Max oracle-TWAP divergence
+  };
+  validity: {
+    slotsBeforeStaleForAmm: BN;           // Max age for AMM operations
+    slotsBeforeStaleForMargin: BN;        // Max age for margin calc
+    confidenceIntervalMaxSize: BN;        // Max confidence interval
+    tooVolatileRatio: BN;                 // Max volatility ratio
+  };
+};
+```
+
+**Example Checks:**
+
+```typescript
+// Confidence interval check
+if (confidence > price * tooVolatileRatio) {
+  return OracleValidity.TooVolatile;
+}
+
+// Staleness check for margin
+if (currentSlot - oracleSlot > slotsBeforeStaleForMargin) {
+  return OracleValidity.StaleForMargin;
+}
+
+// Price divergence check
+const divergence = abs(markPrice - oraclePrice) / oraclePrice;
+if (divergence > markOraclePercentDivergence) {
+  // Reject operation or adjust parameters
+}
+```
+
+## Historical Oracle Data
+
+Markets maintain historical oracle data for TWAP calculations:
+
+```typescript sdk/src/types.ts
+export type HistoricalOracleData = {
+  lastOraclePrice: BN;
+  lastOracleDelay: BN;
+  lastOracleConf: BN;
+  lastOraclePriceTwap: BN;      // 1-hour TWAP
+  lastOraclePriceTwap5Min: BN;  // 5-minute TWAP
+  lastOraclePriceTwapTs: BN;    // Last TWAP update timestamp
+};
+```
+
+### TWAP Calculation
+
+Time-Weighted Average Price provides manipulation resistance:
+
+$$
+TWAP_{new} = TWAP_{old} + \frac{(price_{current} - TWAP_{old}) \times \Delta t}{period}
+$$
+
+Where:
+- `period` = TWAP window (e.g., 3600 seconds for 1-hour TWAP)
+- `Δt` = time since last update
+
+TWAPs are used for:
+- Funding rate calculations
+- Detecting price manipulation
+- Guard rails against oracle divergence
+
+## Oracle Price in Margin Calculations
+
+For margin calculations, conservative oracle prices are used:
+
+```typescript sdk/src/math/margin.ts
+export function calculateOraclePriceForPerpMargin(
+  perpPosition: PerpPosition,
+  market: PerpMarketAccount,
+  oraclePriceData: OraclePriceData
+): BN
+```
+
+**For Long Positions:**
+
+$$
+marginPrice = oraclePrice - offset
+$$
+
+**For Short Positions:**
+
+$$
+marginPrice = oraclePrice + offset
+$$
+
+Where:
+
+$$
+offset = \min(maxSpread \times oraclePrice, confidence + baseSpread \times oraclePrice)
+$$
+
+This provides a safety buffer against adverse price movements.
+
+## Oracle Price for AMM Operations
+
+The AMM uses oracle prices to determine repegging targets:
+
+```typescript
+const targetPrice = mmOraclePriceData.price;
+const newPeg = calculatePegFromTargetPrice(
+  targetPrice,
+  amm.baseAssetReserve,
+  amm.quoteAssetReserve
+);
+```
+
+The AMM continuously adjusts its peg multiplier to track the oracle price, minimizing arbitrage opportunities.
+
+## Oracle Confidence Intervals
+
+Confidence intervals represent price uncertainty:
+
+```typescript
+// Pyth oracle returns
+const price = 100_000_000;       // $100
+const confidence = 500_000;       // ±$0.50
+
+// Effective price range
+const minPrice = price - confidence;  // $99.50
+const maxPrice = price + confidence;  // $100.50
+```
+
+**Usage:**
+
+- **Margin calculations**: Use worst-case price (minPrice for longs, maxPrice for shorts)
+- **Liquidations**: Use conservative prices to avoid premature liquidation
+- **Order validation**: Reject orders if confidence too wide
+
+<Warning>
+Wide confidence intervals during high volatility can prevent trading or trigger stricter margin requirements.
+</Warning>
+
+## Oracle Update Frequency
+
+Different oracle types have different update frequencies:
+
+| Oracle Type | Update Frequency | Latency |
+|------------|------------------|----------|
+| Pyth Push | ~400ms | Low |
+| Pyth Pull | Per transaction | Lowest |
+| Pyth Lazer | ~100ms | Lowest |
+| Switchboard | ~1000ms | Medium |
+| Switchboard On-Demand | Per transaction | Low |
+
+### Staleness Thresholds
+
+The protocol defines staleness thresholds:
+
+```typescript
+// From OracleGuardRails.validity
+slotsBeforeStaleForAmm: 50,        // ~20 seconds at 400ms/slot
+slotsBeforeStaleForMargin: 120,    // ~48 seconds
+```
+
+Stale prices are rejected to prevent exploitation.
+
+## Oracle Precision
+
+Different oracle variants have different precision:
+
+- **Standard**: 6 decimals (e.g., $100.000000)
+- **1K**: 3 decimals (e.g., $100.000) - for higher-priced assets
+- **1M**: 0 decimals (e.g., $100) - for very high-priced assets
+- **StableCoin**: 6 decimals with tighter bounds for stablecoins
+
+The protocol normalizes all prices to `PRICE_PRECISION` (1e6) internally.
+
+## Oracle Fallbacks
+
+If primary oracle fails, the protocol has fallback mechanisms:
+
+1. **Use last valid price**: Within staleness threshold
+2. **Use TWAP**: If available and recent
+3. **Use alternative oracle**: If configured
+4. **Pause operations**: If no valid price available
+
+## Market Maker Oracle Updates
+
+Market makers can submit their own oracle updates:
+
+```typescript
+// From AMM
+mmOraclePrice: BN;      // Market maker's oracle price
+mmOracleSlot: BN;       // Slot of MM oracle update
+mmOracleSequenceId: BN; // Sequence number
+```
+
+This is enabled via feature flags and allows designated market makers to provide additional price data.
+
+## Oracle Integration Example
+
+Reading oracle data:
+
+```typescript
+import { DriftClient } from '@drift-labs/sdk';
+
+const driftClient = new DriftClient({...});
+
+// Get oracle price data for a perp market
+const marketIndex = 0; // SOL-PERP
+const perpMarket = driftClient.getPerpMarketAccount(marketIndex);
+const oraclePriceData = driftClient.getOraclePriceData(
+  perpMarket.amm.oracle,
+  perpMarket.amm.oracleSource
+);
+
+console.log('Price:', oraclePriceData.price.toString());
+console.log('Confidence:', oraclePriceData.confidence.toString());
+console.log('Valid:', oraclePriceData.hasSufficientNumberOfDataPoints);
+```
+
+## Oracle Security Considerations
+
+<AccordionGroup>
+  <Accordion title="Price Manipulation Resistance">
+    TWAPs and confidence intervals make flash loan attacks and single-block manipulation ineffective. The protocol uses multiple data points and time-weighted averages.
+  </Accordion>
+  
+  <Accordion title="Staleness Protection">
+    Strict staleness checks prevent use of outdated prices during oracle downtime. Operations are paused rather than using stale data.
+  </Accordion>
+  
+  <Accordion title="Confidence Interval Validation">
+    Wide confidence intervals during volatility prevent risky operations. The protocol waits for confidence to narrow before allowing certain actions.
+  </Accordion>
+  
+  <Accordion title="Multiple Oracle Support">
+    Supporting multiple oracle providers (Pyth, Switchboard) provides redundancy and reduces single points of failure.
+  </Accordion>
+</AccordionGroup>
+
+## Oracle Price Examples
+
+**Standard Asset (SOL):**
+```typescript
+price: 100_000_000      // $100.00
+confidence: 100_000     // ±$0.10
+oracleSource: PYTH_PULL
+```
+
+**High-Priced Asset (BTC):**
+```typescript
+price: 50000_000        // $50,000
+confidence: 5_000       // ±$5
+oracleSource: PYTH_1K
+```
+
+**Stablecoin (USDC):**
+```typescript
+price: 1_000_000        // $1.00
+confidence: 1_000       // ±$0.001
+oracleSource: PYTH_STABLE_COIN
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Markets" icon="store" href="/concepts/markets">
+    See how oracles are configured per market
+  </Card>
+  <Card title="Margin System" icon="scale-balanced" href="/concepts/margin">
+    Understand oracle price usage in margin
+  </Card>
+  <Card title="AMM" icon="chart-mixed" href="/concepts/amm">
+    Learn about AMM repegging with oracles
+  </Card>
+  <Card title="Integration Guide" icon="plug" href="/sdk/oracles">
+    Integrate oracle data in your app
+  </Card>
+</CardGroup>

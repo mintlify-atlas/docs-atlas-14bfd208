@@ -1,0 +1,634 @@
+---
+title: 'DLOB (Decentralized Limit Order Book)'
+description: 'Decentralized Limit Order Book for order matching and liquidity discovery in Drift Protocol v2'
+---
+
+## Overview
+
+The DLOB (Decentralized Limit Order Book) is Drift's on-chain order matching system. It aggregates all user orders and provides efficient access to market liquidity, order matching, and L2/L3 order book views.
+
+## DLOB Class
+
+### Constructor
+
+Creates a new DLOB instance.
+
+```typescript
+import { DLOB } from '@drift-labs/sdk';
+
+const dlob = new DLOB();
+```
+
+**Parameters:**
+
+<ParamField path="protectedMakerParamsMap" type="ProtectMakerParamsMap">
+  Optional map of protected maker parameters by market.
+</ParamField>
+
+### initFromUserMap
+
+Initializes the DLOB from a UserMap.
+
+```typescript
+await dlob.initFromUserMap(userMap, currentSlot);
+```
+
+**Parameters:**
+
+<ParamField path="userMap" type="UserMap" required>
+  Map of user accounts containing orders.
+</ParamField>
+
+<ParamField path="slot" type="number" required>
+  Current blockchain slot number.
+</ParamField>
+
+**Returns:** Promise\<boolean\> - True if successfully initialized
+
+### insertOrder
+
+Inserts an order into the DLOB.
+
+```typescript
+dlob.insertOrder(
+  order,
+  userAccountPubkey,
+  slot,
+  isProtectedMaker,
+  baseAssetAmount
+);
+```
+
+**Parameters:**
+
+<ParamField path="order" type="Order" required>
+  The order to insert.
+</ParamField>
+
+<ParamField path="userAccount" type="string" required>
+  User account public key as string.
+</ParamField>
+
+<ParamField path="slot" type="number" required>
+  Current slot number.
+</ParamField>
+
+<ParamField path="isUserProtectedMaker" type="boolean" required>
+  Whether user has protected maker status.
+</ParamField>
+
+<ParamField path="baseAssetAmount" type="BN" required>
+  Base asset amount for the order.
+</ParamField>
+
+<ParamField path="onInsert" type="OrderBookCallback">
+  Optional callback executed after insertion.
+</ParamField>
+
+### clear
+
+Clears all orders from the DLOB.
+
+```typescript
+dlob.clear();
+```
+
+## Order Book Queries
+
+### getL2
+
+Returns an L2 (aggregated by price level) view of the order book.
+
+```typescript
+const l2 = dlob.getL2({
+  marketIndex: 0,
+  marketType: MarketType.PERP,
+  slot: currentSlot,
+  oraclePriceData: mmOraclePriceData,
+  depth: 20,
+  fallbackL2Generators: [vammGenerator],
+});
+
+console.log('Best bid:', l2.bids[0].price.toString());
+console.log('Best ask:', l2.asks[0].price.toString());
+```
+
+**Parameters:**
+
+<ParamField path="marketIndex" type="number" required>
+  Market index to query.
+</ParamField>
+
+<ParamField path="marketType" type="MarketType" required>
+  Market type (PERP or SPOT).
+</ParamField>
+
+<ParamField path="slot" type="number" required>
+  Current slot number.
+</ParamField>
+
+<ParamField path="oraclePriceData" type="OraclePriceData | MMOraclePriceData" required>
+  Oracle price data for the market.
+</ParamField>
+
+<ParamField path="depth" type="number" required>
+  Number of price levels to return on each side.
+</ParamField>
+
+<ParamField path="fallbackL2Generators" type="L2OrderBookGenerator[]" default="[]">
+  Additional liquidity sources (e.g., vAMM, OpenBook).
+</ParamField>
+
+**Returns:** L2OrderBook
+
+<ResponseField name="bids" type="L2Level[]">
+  Array of bid levels sorted by price (descending).
+</ResponseField>
+
+<ResponseField name="asks" type="L2Level[]">
+  Array of ask levels sorted by price (ascending).
+</ResponseField>
+
+<ResponseField name="slot" type="number">
+  Slot number when the book was generated.
+</ResponseField>
+
+**L2Level fields:**
+
+<ResponseField name="price" type="BN">
+  Price level in PRICE_PRECISION (1e6).
+</ResponseField>
+
+<ResponseField name="size" type="BN">
+  Total size at this price level.
+</ResponseField>
+
+<ResponseField name="sources" type="object">
+  Map of liquidity sources to sizes.
+</ResponseField>
+
+### getL3
+
+Returns an L3 (individual orders) view of the order book.
+
+```typescript
+const l3 = dlob.getL3({
+  marketIndex: 0,
+  marketType: MarketType.PERP,
+  slot: currentSlot,
+  oraclePriceData: oraclePriceData,
+});
+
+for (const bid of l3.bids) {
+  console.log(`Order ${bid.orderId} from ${bid.maker}: ${bid.size} @ ${bid.price}`);
+}
+```
+
+**Parameters:**
+
+<ParamField path="marketIndex" type="number" required>
+  Market index to query.
+</ParamField>
+
+<ParamField path="marketType" type="MarketType" required>
+  Market type (PERP or SPOT).
+</ParamField>
+
+<ParamField path="slot" type="number" required>
+  Current slot number.
+</ParamField>
+
+<ParamField path="oraclePriceData" type="OraclePriceData | MMOraclePriceData" required>
+  Oracle price data for the market.
+</ParamField>
+
+**Returns:** L3OrderBook
+
+<ResponseField name="bids" type="L3Level[]">
+  Individual bid orders sorted by price (descending).
+</ResponseField>
+
+<ResponseField name="asks" type="L3Level[]">
+  Individual ask orders sorted by price (ascending).
+</ResponseField>
+
+<ResponseField name="slot" type="number">
+  Slot number when the book was generated.
+</ResponseField>
+
+**L3Level fields:**
+
+<ResponseField name="price" type="BN">
+  Order price in PRICE_PRECISION (1e6).
+</ResponseField>
+
+<ResponseField name="size" type="BN">
+  Order size (remaining).
+</ResponseField>
+
+<ResponseField name="maker" type="PublicKey">
+  Public key of the order maker.
+</ResponseField>
+
+<ResponseField name="orderId" type="number">
+  Order ID.
+</ResponseField>
+
+### getBestBid / getBestAsk
+
+Get the best bid or ask price for a market.
+
+```typescript
+const bestBid = dlob.getBestBid(
+  marketIndex,
+  slot,
+  MarketType.PERP,
+  oraclePriceData
+);
+
+const bestAsk = dlob.getBestAsk(
+  marketIndex,
+  slot,
+  MarketType.PERP,
+  oraclePriceData
+);
+
+if (bestBid && bestAsk) {
+  const spread = bestAsk.sub(bestBid);
+  console.log('Spread:', spread.toString());
+}
+```
+
+**Parameters:**
+
+<ParamField path="marketIndex" type="number" required>
+  Market index to query.
+</ParamField>
+
+<ParamField path="slot" type="number" required>
+  Current slot number.
+</ParamField>
+
+<ParamField path="marketType" type="MarketType" required>
+  Market type.
+</ParamField>
+
+<ParamField path="oraclePriceData" type="OraclePriceData | MMOraclePriceData" required>
+  Oracle price data.
+</ParamField>
+
+**Returns:** BN | undefined - Best bid/ask price or undefined if no orders
+
+## Order Matching
+
+### findNodesToFill
+
+Finds orders that can be filled, considering both maker-taker matching and fallback liquidity.
+
+```typescript
+const nodesToFill = dlob.findNodesToFill(
+  marketIndex,
+  fallbackBid,
+  fallbackAsk,
+  slot,
+  timestamp,
+  MarketType.PERP,
+  oraclePriceData,
+  stateAccount,
+  perpMarketAccount
+);
+
+for (const nodeToFill of nodesToFill) {
+  console.log('Fillable order:', nodeToFill.node.order.orderId);
+  console.log('Maker nodes:', nodeToFill.makerNodes.length);
+}
+```
+
+**Parameters:**
+
+<ParamField path="marketIndex" type="number" required>
+  Market index.
+</ParamField>
+
+<ParamField path="fallbackBid" type="BN | undefined" required>
+  Fallback bid price (e.g., from vAMM).
+</ParamField>
+
+<ParamField path="fallbackAsk" type="BN | undefined" required>
+  Fallback ask price (e.g., from vAMM).
+</ParamField>
+
+<ParamField path="slot" type="number" required>
+  Current slot.
+</ParamField>
+
+<ParamField path="ts" type="number" required>
+  Current timestamp.
+</ParamField>
+
+<ParamField path="marketType" type="MarketType" required>
+  Market type.
+</ParamField>
+
+<ParamField path="oraclePriceData" type="OraclePriceData | MMOraclePriceData" required>
+  Oracle price data.
+</ParamField>
+
+<ParamField path="stateAccount" type="StateAccount" required>
+  State account.
+</ParamField>
+
+<ParamField path="marketAccount" type="PerpMarketAccount | SpotMarketAccount" required>
+  Market account.
+</ParamField>
+
+**Returns:** NodeToFill[]
+
+<ResponseField name="node" type="DLOBNode">
+  The taker order node to fill.
+</ResponseField>
+
+<ResponseField name="makerNodes" type="DLOBNode[]">
+  Array of maker nodes that can fill the taker. Empty if filling against fallback liquidity.
+</ResponseField>
+
+### findNodesToTrigger
+
+Finds trigger orders (stop loss / take profit) that should be activated.
+
+```typescript
+const nodesToTrigger = dlob.findNodesToTrigger(
+  marketIndex,
+  slot,
+  oraclePrice,
+  MarketType.PERP,
+  stateAccount
+);
+
+for (const trigger of nodesToTrigger) {
+  console.log('Trigger order:', trigger.node.order.orderId);
+}
+```
+
+**Parameters:**
+
+<ParamField path="marketIndex" type="number" required>
+  Market index.
+</ParamField>
+
+<ParamField path="slot" type="number" required>
+  Current slot.
+</ParamField>
+
+<ParamField path="triggerPrice" type="BN" required>
+  Current oracle price to check against.
+</ParamField>
+
+<ParamField path="marketType" type="MarketType" required>
+  Market type.
+</ParamField>
+
+<ParamField path="stateAccount" type="StateAccount" required>
+  State account.
+</ParamField>
+
+**Returns:** NodeToTrigger[]
+
+<ResponseField name="node" type="TriggerOrderNode">
+  The trigger order that should be activated.
+</ResponseField>
+
+## Trigger Orders
+
+### getStopLosses
+
+Get all stop loss orders for a position direction.
+
+```typescript
+for (const stopLoss of dlob.getStopLosses(
+  marketIndex,
+  MarketType.PERP,
+  PositionDirection.LONG
+)) {
+  console.log('Stop loss:', stopLoss.order.triggerPrice.toString());
+}
+```
+
+**Parameters:**
+
+<ParamField path="marketIndex" type="number" required>
+  Market index.
+</ParamField>
+
+<ParamField path="marketType" type="MarketType" required>
+  Market type.
+</ParamField>
+
+<ParamField path="direction" type="PositionDirection" required>
+  Position direction to get stop losses for.
+</ParamField>
+
+**Returns:** Generator\<DLOBNode\> - Iterator of stop loss orders
+
+### getTakeProfits
+
+Get all take profit orders for a position direction.
+
+```typescript
+for (const takeProfit of dlob.getTakeProfits(
+  marketIndex,
+  MarketType.PERP,
+  PositionDirection.LONG
+)) {
+  console.log('Take profit:', takeProfit.order.triggerPrice.toString());
+}
+```
+
+**Parameters:**
+
+<ParamField path="marketIndex" type="number" required>
+  Market index.
+</ParamField>
+
+<ParamField path="marketType" type="MarketType" required>
+  Market type.
+</ParamField>
+
+<ParamField path="direction" type="PositionDirection" required>
+  Position direction to get take profits for.
+</ParamField>
+
+**Returns:** Generator\<DLOBNode\> - Iterator of take profit orders
+
+## DLOBSubscriber
+
+The DLOBSubscriber automatically updates the DLOB in the background.
+
+### Constructor
+
+```typescript
+import { DLOBSubscriber, UserMap } from '@drift-labs/sdk';
+
+const userMap = new UserMap({
+  driftClient,
+  subscriptionConfig: {
+    type: 'websocket',
+    resubTimeoutMs: 30_000,
+  },
+});
+
+const dlobSubscriber = new DLOBSubscriber({
+  driftClient,
+  dlobSource: userMap,
+  slotSource: userMap,
+  updateFrequency: 1000, // Update every 1 second
+  protectedMakerView: false,
+});
+```
+
+**Configuration:**
+
+<ParamField path="driftClient" type="DriftClient" required>
+  The Drift client instance.
+</ParamField>
+
+<ParamField path="dlobSource" type="DLOBSource" required>
+  Source for DLOB data (typically UserMap).
+</ParamField>
+
+<ParamField path="slotSource" type="SlotSource" required>
+  Source for current slot (typically UserMap).
+</ParamField>
+
+<ParamField path="updateFrequency" type="number" required>
+  Update frequency in milliseconds.
+</ParamField>
+
+<ParamField path="protectedMakerView" type="boolean" default="false">
+  Enable protected maker view.
+</ParamField>
+
+### subscribe / unsubscribe
+
+```typescript
+// Start subscribing
+await dlobSubscriber.subscribe();
+
+// Listen for updates
+dlobSubscriber.eventEmitter.on('update', (dlob) => {
+  console.log('DLOB updated');
+});
+
+dlobSubscriber.eventEmitter.on('error', (error) => {
+  console.error('DLOB error:', error);
+});
+
+// Get current DLOB
+const dlob = dlobSubscriber.getDLOB();
+
+// Stop subscribing
+await dlobSubscriber.unsubscribe();
+```
+
+### getL2 / getL3
+
+Convenience methods for getting order book views.
+
+```typescript
+const l2 = dlobSubscriber.getL2({
+  marketName: 'SOL-PERP',
+  depth: 20,
+  includeVamm: true,
+});
+
+const l3 = dlobSubscriber.getL3({
+  marketIndex: 0,
+  marketType: MarketType.PERP,
+});
+```
+
+**Parameters:**
+
+<ParamField path="marketName" type="string">
+  Market name (e.g., "SOL-PERP" or "SOL"). Alternative to marketIndex + marketType.
+</ParamField>
+
+<ParamField path="marketIndex" type="number">
+  Market index (required if marketName not provided).
+</ParamField>
+
+<ParamField path="marketType" type="MarketType">
+  Market type (required if marketName not provided).
+</ParamField>
+
+<ParamField path="depth" type="number" default="10">
+  Number of levels to return (L2 only).
+</ParamField>
+
+<ParamField path="includeVamm" type="boolean" default="false">
+  Include vAMM liquidity (L2 only, perp markets only).
+</ParamField>
+
+<ParamField path="numVammOrders" type="number">
+  Number of vAMM orders to generate (L2 only).
+</ParamField>
+
+<ParamField path="fallbackL2Generators" type="L2OrderBookGenerator[]" default="[]">
+  Additional liquidity sources (L2 only).
+</ParamField>
+
+<ParamField path="latestSlot" type="BN">
+  Latest slot for accurate vAMM quotes (L2 only).
+</ParamField>
+
+## DLOBNode Types
+
+The DLOB uses different node types for different order categories:
+
+- **RestingLimitOrderNode** - Limit orders past auction period
+- **TakingLimitOrderNode** - Limit orders in auction period
+- **FloatingLimitOrderNode** - Orders with oracle price offset
+- **MarketOrderNode** - Market orders
+- **TriggerOrderNode** - Trigger orders (stop loss / take profit)
+- **SignedMsgOrderNode** - Off-chain signed message orders
+
+## Example: Market Making Bot
+
+```typescript
+import { DLOBSubscriber, MarketType } from '@drift-labs/sdk';
+
+// Subscribe to DLOB
+const dlobSubscriber = new DLOBSubscriber({
+  driftClient,
+  dlobSource: userMap,
+  slotSource: userMap,
+  updateFrequency: 1000,
+});
+
+await dlobSubscriber.subscribe();
+
+// Monitor order book
+dlobSubscriber.eventEmitter.on('update', (dlob) => {
+  const l2 = dlobSubscriber.getL2({
+    marketName: 'SOL-PERP',
+    depth: 5,
+    includeVamm: true,
+  });
+  
+  if (l2.bids.length > 0 && l2.asks.length > 0) {
+    const bestBid = l2.bids[0].price;
+    const bestAsk = l2.asks[0].price;
+    const midPrice = bestBid.add(bestAsk).divn(2);
+    
+    console.log('Mid price:', midPrice.toString());
+    console.log('Spread:', bestAsk.sub(bestBid).toString());
+    
+    // Place orders based on mid price...
+  }
+});
+```
+
+## See Also
+
+- [OrderParams](/api/trading/order-params) - Configure orders
+- [Position Management](/api/trading/position-management) - Track positions

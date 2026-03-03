@@ -1,0 +1,459 @@
+---
+title: Advanced Features
+description: Advanced SDK features and patterns for Drift Protocol
+---
+
+This guide covers advanced features of the Drift SDK including custom transaction handling, event processing, high-leverage mode, and advanced order types.
+
+## Custom Transaction Handling
+
+### Custom Transaction Sender
+
+Implement custom transaction submission logic:
+
+```typescript
+import { TxSender, TxSigAndSlot } from '@drift-labs/sdk';
+import { Transaction, VersionedTransaction, TransactionSignature } from '@solana/web3.js';
+
+class CustomTxSender implements TxSender {
+  async send(
+    tx: Transaction | VersionedTransaction,
+    additionalSigners?: Signer[],
+    opts?: any
+  ): Promise<TxSigAndSlot> {
+    // Custom transaction logic
+    console.log('Sending custom transaction...');
+    
+    // Add your custom preflight checks
+    // Add custom signing logic
+    // Add custom retry logic
+    
+    const signature = await this.connection.sendTransaction(tx, opts);
+    const slot = await this.connection.getSlot();
+    
+    return { txSig: signature, slot };
+  }
+  
+  async sendVersionedTransaction(
+    tx: VersionedTransaction,
+    opts?: any
+  ): Promise<TxSigAndSlot> {
+    // Custom versioned transaction logic
+    const signature = await this.connection.sendTransaction(tx, opts);
+    const slot = await this.connection.getSlot();
+    
+    return { txSig: signature, slot };
+  }
+}
+
+// Use custom sender
+const customSender = new CustomTxSender();
+const driftClient = new DriftClient({
+  // ... other config
+  txSender: customSender,
+});
+```
+
+### Priority Fees
+
+Add compute budget and priority fees to transactions:
+
+```typescript
+import {
+  ComputeBudgetProgram,
+  TransactionInstruction,
+} from '@solana/web3.js';
+
+// Add compute budget instructions
+const computeUnitLimit = ComputeBudgetProgram.setComputeUnitLimit({
+  units: 400_000,
+});
+
+const computeUnitPrice = ComputeBudgetProgram.setComputeUnitPrice({
+  microLamports: 100_000, // 0.0001 SOL per CU
+});
+
+// Add to transaction
+const tx = await driftClient.buildTransaction(
+  // your instruction
+);
+
+tx.add(computeUnitLimit);
+tx.add(computeUnitPrice);
+
+await driftClient.sendTransaction(tx);
+```
+
+### Dynamic Priority Fees
+
+```typescript
+import { PriorityFeeSubscriber } from '@drift-labs/sdk';
+
+// Subscribe to recommended priority fees
+const priorityFeeSubscriber = new PriorityFeeSubscriber({
+  connection: driftClient.connection,
+  frequencyMs: 10_000, // Update every 10 seconds
+});
+
+await priorityFeeSubscriber.subscribe();
+
+// Get recommended fee for transaction
+const recommendedFee = priorityFeeSubscriber.getCustomStrategyResult(
+  'drift_trades' // strategy name
+);
+
+console.log('Recommended priority fee:', recommendedFee);
+```
+
+## Event Processing
+
+### Transaction Event Parsing
+
+```typescript
+import { EventSubscriber, WrappedEvent } from '@drift-labs/sdk';
+
+// Subscribe to Drift program events
+const eventSubscriber = new EventSubscriber({
+  connection: driftClient.connection,
+  programId: driftClient.program.programId,
+});
+
+await eventSubscriber.subscribe();
+
+// Listen for specific events
+eventSubscriber.eventEmitter.on('newEvent', (event: WrappedEvent) => {
+  if (event.eventType === 'OrderRecord') {
+    const orderRecord = event.data as OrderRecord;
+    console.log('Order placed:');
+    console.log('  User:', orderRecord.user.toBase58());
+    console.log('  Order ID:', orderRecord.orderId);
+    console.log('  Direction:', orderRecord.direction);
+    console.log('  Base amount:', orderRecord.baseAssetAmount.toString());
+  }
+  
+  if (event.eventType === 'OrderActionRecord') {
+    const actionRecord = event.data as OrderActionRecord;
+    console.log('Order action:');
+    console.log('  Action:', actionRecord.action);
+    console.log('  Fill amount:', actionRecord.baseAssetAmountFilled?.toString());
+    console.log('  Fill price:', actionRecord.quoteAssetAmountFilled?.toString());
+  }
+});
+```
+
+### Parse Transaction Logs
+
+```typescript
+import { parseLogsForFailedExplicitCancel } from '@drift-labs/sdk';
+
+// Parse transaction logs for specific events
+const txSig = await driftClient.placePerpOrder(orderParams);
+const tx = await driftClient.connection.getTransaction(txSig, {
+  commitment: 'confirmed',
+});
+
+if (tx?.meta?.logMessages) {
+  const failedCancel = parseLogsForFailedExplicitCancel(tx.meta.logMessages);
+  if (failedCancel) {
+    console.log('Order cancel failed for:', failedCancel);
+  }
+}
+```
+
+## High Leverage Mode
+
+High Leverage Mode allows increased position leverage with specific margin requirements:
+
+```typescript
+import { HighLeverageModeConfig } from '@drift-labs/sdk';
+
+// Get high leverage mode config
+const hlmConfig = await driftClient.getHighLeverageModeConfig(perpMarketIndex);
+
+if (hlmConfig) {
+  console.log('Max leverage:', hlmConfig.maxLeverage);
+  console.log('IMF factor:', hlmConfig.imfFactor);
+  console.log('Reduce only:', hlmConfig.reduceOnly);
+}
+
+// Enable high leverage mode for user
+await driftClient.updateUserHighLeverageMode(
+  perpMarketIndex,
+  true // enable
+);
+
+// Check if user has HLM enabled
+const userAccount = user.getUserAccount();
+const hasHLM = userAccount.perpPositions[perpMarketIndex]?.highLeverageMode === true;
+console.log('High leverage mode enabled:', hasHLM);
+```
+
+<Warning>
+  High Leverage Mode has higher margin requirements and liquidation risk. Only use if you understand the risks.
+</Warning>
+
+## Advanced Order Features
+
+### Place and Take
+
+Place an order and immediately attempt to fill it against the book:
+
+```typescript
+import { PlaceAndTakeOrderSuccessCondition } from '@drift-labs/sdk';
+
+const orderParams = getLimitOrderParams({
+  marketIndex: 0,
+  direction: PositionDirection.LONG,
+  baseAssetAmount: new BN(1).mul(BASE_PRECISION),
+  price: new BN(145).mul(PRICE_PRECISION),
+});
+
+// Place and immediately attempt to fill
+await driftClient.placeAndTakePerpOrder(
+  orderParams,
+  undefined, // fulfillment config
+  PlaceAndTakeOrderSuccessCondition.PARTIAL_FILL // Success condition
+);
+```
+
+### Protected Maker Mode
+
+Protected Maker Mode prevents your maker orders from being filled by your own taker orders:
+
+```typescript
+// Enable protected maker mode
+await driftClient.updateUserProtectedMakerMode(true);
+
+// Check if enabled
+const userAccount = user.getUserAccount();
+console.log('Protected maker:', userAccount.isProtectedMaker);
+```
+
+### Maker Order Referrals
+
+Set maker referral for order rebates:
+
+```typescript
+import { getReferrerInfo } from '@drift-labs/sdk';
+
+// Get referrer public key
+const referrerInfo = await getReferrerInfo(referrerName, driftClient);
+
+const orderParams = getLimitOrderParams({
+  // ... order params
+  makerOrderId: 42, // optional custom ID
+});
+
+// Place order with referral
+await driftClient.placePerpOrder(orderParams, {
+  referrerInfo,
+});
+```
+
+## Bulk Operations
+
+### Cancel Multiple Orders
+
+```typescript
+// Cancel specific orders
+const orderIds = [1, 2, 3, 4, 5];
+await driftClient.cancelOrders(
+  MarketType.PERP,
+  undefined, // market index (undefined = all markets)
+  PositionDirection.LONG, // direction (undefined = both)
+  orderIds
+);
+
+// Cancel all orders for a market
+await driftClient.cancelOrdersByMarketType(MarketType.PERP);
+
+// Cancel all orders for a user
+await driftClient.cancelAllOrders();
+```
+
+### Batch Place Orders
+
+```typescript
+import { OrderParams } from '@drift-labs/sdk';
+
+// Create multiple orders
+const orders: OrderParams[] = [
+  getLimitOrderParams({
+    marketIndex: 0,
+    direction: PositionDirection.LONG,
+    baseAssetAmount: new BN(1).mul(BASE_PRECISION),
+    price: new BN(140).mul(PRICE_PRECISION),
+  }),
+  getLimitOrderParams({
+    marketIndex: 0,
+    direction: PositionDirection.LONG,
+    baseAssetAmount: new BN(1).mul(BASE_PRECISION),
+    price: new BN(142).mul(PRICE_PRECISION),
+  }),
+  getLimitOrderParams({
+    marketIndex: 0,
+    direction: PositionDirection.LONG,
+    baseAssetAmount: new BN(1).mul(BASE_PRECISION),
+    price: new BN(144).mul(PRICE_PRECISION),
+  }),
+];
+
+// Place all orders in one transaction
+await driftClient.placeOrders(orders);
+```
+
+## Spot Swaps
+
+Swap between spot assets:
+
+```typescript
+import { SwapDirection } from '@drift-labs/sdk';
+
+// Swap USDC for SOL
+await driftClient.swap(
+  new BN(100).mul(QUOTE_PRECISION), // 100 USDC
+  0, // USDC market
+  1, // SOL market
+  SwapDirection.ADD // ADD = buy SOL, REMOVE = sell SOL
+);
+```
+
+### With Slippage Protection
+
+```typescript
+// Swap with maximum slippage
+const amountIn = new BN(100).mul(QUOTE_PRECISION);
+const expectedOut = new BN(0.5).mul(BASE_PRECISION); // Expect ~0.5 SOL
+const maxSlippage = new BN(50); // 0.5% = 50 / 10000
+
+const minOut = expectedOut
+  .mul(new BN(10000).sub(maxSlippage))
+  .div(new BN(10000));
+
+await driftClient.swap(
+  amountIn,
+  0, // USDC
+  1, // SOL
+  SwapDirection.ADD,
+  minOut // Minimum output amount
+);
+```
+
+## Address Lookup Tables
+
+Use address lookup tables to reduce transaction size:
+
+```typescript
+import { AddressLookupTableAccount } from '@solana/web3.js';
+
+// Load lookup table
+const lookupTableAddress = new PublicKey('...');
+const lookupTableAccount = await connection
+  .getAddressLookupTable(lookupTableAddress)
+  .then(res => res.value);
+
+if (lookupTableAccount) {
+  // Use in transactions
+  const tx = await driftClient.buildTransaction(
+    instruction,
+    [lookupTableAccount] // address lookup tables
+  );
+  
+  await driftClient.sendTransaction(tx);
+}
+```
+
+## Custom Confirmations
+
+```typescript
+import { ConfirmOptions } from '@solana/web3.js';
+
+const customOpts: ConfirmOptions = {
+  commitment: 'processed', // processed | confirmed | finalized
+  preflightCommitment: 'processed',
+  skipPreflight: false,
+  maxRetries: 3,
+};
+
+const driftClient = new DriftClient({
+  // ... other config
+  opts: customOpts,
+});
+
+// Or override per transaction
+await driftClient.placePerpOrder(orderParams, undefined, customOpts);
+```
+
+## Rate Limiting
+
+```typescript
+import pLimit from 'p-limit';
+
+// Limit concurrent operations
+const limit = pLimit(5); // Max 5 concurrent operations
+
+const operations = markets.map(marketIndex => 
+  limit(async () => {
+    const market = driftClient.getPerpMarketAccount(marketIndex);
+    const oracleData = driftClient.getOracleDataForPerpMarket(marketIndex);
+    
+    return {
+      marketIndex,
+      price: oracleData.price,
+    };
+  })
+);
+
+const results = await Promise.all(operations);
+```
+
+## Best Practices
+
+<Accordion title="Use retry logic for transactions">
+  ```typescript
+  async function sendWithRetry(fn: () => Promise<string>, maxRetries = 3) {
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        return await fn();
+      } catch (error) {
+        if (i === maxRetries - 1) throw error;
+        console.log(`Retry ${i + 1}/${maxRetries}`);
+        await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+      }
+    }
+  }
+  
+  const txSig = await sendWithRetry(() => 
+    driftClient.placePerpOrder(orderParams)
+  );
+  ```
+</Accordion>
+
+<Accordion title="Handle compute budget appropriately">
+  Different operations require different compute budgets. Monitor your transactions and adjust accordingly.
+</Accordion>
+
+<Accordion title="Monitor event logs">
+  Always listen to event logs to confirm your operations executed as expected.
+</Accordion>
+
+<Accordion title="Batch operations when possible">
+  Use batch operations like `placeOrders` to save on transaction fees and reduce latency.
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Examples" icon="code" href="/examples/market-making">
+    Real-world implementation examples
+  </Card>
+  <Card title="API Reference" icon="book" href="/api/drift-client">
+    Complete API documentation
+  </Card>
+  <Card title="Trading API" icon="chart-line" href="/api/trading/order-params">
+    Advanced trading features
+  </Card>
+  <Card title="Event Listening" icon="bell" href="/examples/event-listening">
+    Process transaction events
+  </Card>
+</CardGroup>

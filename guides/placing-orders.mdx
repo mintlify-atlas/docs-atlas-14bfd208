@@ -1,0 +1,440 @@
+---
+title: Placing Orders
+description: Place and manage orders on Drift Protocol
+---
+
+Drift supports multiple order types including market, limit, trigger, and oracle orders. This guide covers how to place each type using the SDK.
+
+## Order Types
+
+<CardGroup cols={2}>
+  <Card title="Market Orders" icon="bolt">
+    Execute immediately at the best available price
+  </Card>
+  <Card title="Limit Orders" icon="list">
+    Execute at a specified price or better
+  </Card>
+  <Card title="Trigger Orders" icon="bell">
+    Activate when a condition is met
+  </Card>
+  <Card title="Oracle Orders" icon="eye">
+    Reference oracle price with offset
+  </Card>
+</CardGroup>
+
+## Placing a Market Order
+
+Market orders execute immediately at the best available price:
+
+```typescript
+import { BN } from '@coral-xyz/anchor';
+import {
+  DriftClient,
+  getMarketOrderParams,
+  PositionDirection,
+  BASE_PRECISION,
+  MarketType,
+} from '@drift-labs/sdk';
+
+// Buy 1 SOL-PERP at market price
+const marketIndex = 0; // SOL-PERP
+const baseAssetAmount = new BN(1).mul(BASE_PRECISION); // 1 SOL
+
+const orderParams = getMarketOrderParams({
+  marketIndex,
+  direction: PositionDirection.LONG,
+  baseAssetAmount,
+  marketType: MarketType.PERP,
+});
+
+const txSig = await driftClient.placePerpOrder(orderParams);
+console.log('Market order placed:', txSig);
+```
+
+### Market Order with Price Limits
+
+Set a maximum acceptable price to prevent slippage:
+
+```typescript
+import { PRICE_PRECISION } from '@drift-labs/sdk';
+
+// Buy SOL-PERP but not above $150
+const maxPrice = new BN(150).mul(PRICE_PRECISION);
+
+const orderParams = getMarketOrderParams({
+  marketIndex: 0,
+  direction: PositionDirection.LONG,
+  baseAssetAmount: new BN(1).mul(BASE_PRECISION),
+  price: maxPrice,
+  marketType: MarketType.PERP,
+});
+
+await driftClient.placePerpOrder(orderParams);
+```
+
+## Placing a Limit Order
+
+Limit orders execute only at your specified price or better:
+
+```typescript
+import {
+  getLimitOrderParams,
+  PositionDirection,
+  PostOnlyParams,
+  BASE_PRECISION,
+  PRICE_PRECISION,
+} from '@drift-labs/sdk';
+
+// Buy 1 SOL-PERP at $145 or better
+const limitPrice = new BN(145).mul(PRICE_PRECISION);
+const baseAmount = new BN(1).mul(BASE_PRECISION);
+
+const orderParams = getLimitOrderParams({
+  marketIndex: 0,
+  direction: PositionDirection.LONG,
+  baseAssetAmount: baseAmount,
+  price: limitPrice,
+  marketType: MarketType.PERP,
+});
+
+const txSig = await driftClient.placePerpOrder(orderParams);
+console.log('Limit order placed:', txSig);
+```
+
+### Post-Only Orders
+
+Ensure your order only adds liquidity (maker fee):
+
+```typescript
+const orderParams = getLimitOrderParams({
+  marketIndex: 0,
+  direction: PositionDirection.LONG,
+  baseAssetAmount: baseAmount,
+  price: limitPrice,
+  postOnly: PostOnlyParams.MUST_POST_ONLY,
+  marketType: MarketType.PERP,
+});
+
+await driftClient.placePerpOrder(orderParams);
+```
+
+<Info>
+  Post-only orders are rejected if they would match immediately. Use `PostOnlyParams.TRY_POST_ONLY` to allow fallback to taker.
+</Info>
+
+### Reduce-Only Orders
+
+Limit orders to only reduce existing positions:
+
+```typescript
+const orderParams = getLimitOrderParams({
+  marketIndex: 0,
+  direction: PositionDirection.SHORT, // Close a long position
+  baseAssetAmount: baseAmount,
+  price: limitPrice,
+  reduceOnly: true,
+  marketType: MarketType.PERP,
+});
+
+await driftClient.placePerpOrder(orderParams);
+```
+
+## Placing a Trigger Order
+
+Trigger orders (stop-loss/take-profit) activate when a price condition is met:
+
+### Stop-Loss Order
+
+```typescript
+import {
+  getTriggerMarketOrderParams,
+  OrderTriggerCondition,
+  PositionDirection,
+} from '@drift-labs/sdk';
+
+// Close long position if SOL drops below $140
+const triggerPrice = new BN(140).mul(PRICE_PRECISION);
+
+const orderParams = getTriggerMarketOrderParams({
+  marketIndex: 0,
+  direction: PositionDirection.SHORT,
+  baseAssetAmount: new BN(1).mul(BASE_PRECISION),
+  triggerPrice,
+  triggerCondition: OrderTriggerCondition.BELOW,
+  marketType: MarketType.PERP,
+});
+
+await driftClient.placePerpOrder(orderParams);
+```
+
+### Take-Profit Order
+
+```typescript
+// Take profit if SOL rises above $160
+const takeProfitPrice = new BN(160).mul(PRICE_PRECISION);
+
+const orderParams = getTriggerMarketOrderParams({
+  marketIndex: 0,
+  direction: PositionDirection.SHORT, // Close long
+  baseAssetAmount: new BN(1).mul(BASE_PRECISION),
+  triggerPrice: takeProfitPrice,
+  triggerCondition: OrderTriggerCondition.ABOVE,
+  marketType: MarketType.PERP,
+});
+
+await driftClient.placePerpOrder(orderParams);
+```
+
+### Trigger Limit Orders
+
+Combine trigger activation with limit execution:
+
+```typescript
+import { getTriggerLimitOrderParams } from '@drift-labs/sdk';
+
+// Trigger at $140, execute as limit at $139
+const orderParams = getTriggerLimitOrderParams({
+  marketIndex: 0,
+  direction: PositionDirection.SHORT,
+  baseAssetAmount: new BN(1).mul(BASE_PRECISION),
+  price: new BN(139).mul(PRICE_PRECISION), // Limit price
+  triggerPrice: new BN(140).mul(PRICE_PRECISION), // Trigger price
+  triggerCondition: OrderTriggerCondition.BELOW,
+  marketType: MarketType.PERP,
+});
+
+await driftClient.placePerpOrder(orderParams);
+```
+
+## Placing an Oracle Order
+
+Oracle orders reference the oracle price with an offset:
+
+```typescript
+import { OrderType } from '@drift-labs/sdk';
+
+// Buy 5% below oracle price
+const orderParams = {
+  orderType: OrderType.ORACLE,
+  marketIndex: 0,
+  direction: PositionDirection.LONG,
+  baseAssetAmount: new BN(1).mul(BASE_PRECISION),
+  oraclePrice Offset: new BN(-5).mul(PRICE_PRECISION).div(new BN(100)), // -5%
+  marketType: MarketType.PERP,
+};
+
+await driftClient.placePerpOrder(orderParams);
+```
+
+## Spot Market Orders
+
+Place orders on spot markets (lending/borrowing):
+
+```typescript
+import { getMarketOrderParams, MarketType } from '@drift-labs/sdk';
+
+// Swap USDC for SOL (borrow if needed)
+const orderParams = getMarketOrderParams({
+  marketIndex: 1, // SOL spot market
+  direction: PositionDirection.LONG,
+  baseAssetAmount: new BN(10).mul(BASE_PRECISION), // 10 SOL
+  marketType: MarketType.SPOT,
+});
+
+await driftClient.placeSpotOrder(orderParams);
+```
+
+## Scale Orders
+
+Place multiple orders across a price range:
+
+```typescript
+import { ScaleOrderParams, SizeDistribution } from '@drift-labs/sdk';
+
+// Place 10 orders from $140 to $150
+const scaleOrderParams: ScaleOrderParams = {
+  orderCount: 10,
+  marketIndex: 0,
+  direction: PositionDirection.LONG,
+  baseAssetAmount: new BN(10).mul(BASE_PRECISION), // Total 10 SOL
+  minPrice: new BN(140).mul(PRICE_PRECISION),
+  maxPrice: new BN(150).mul(PRICE_PRECISION),
+  sizeDistribution: SizeDistribution.UNIFORM,
+};
+
+const txSig = await driftClient.placeScaleOrder(scaleOrderParams);
+console.log('Scale orders placed:', txSig);
+```
+
+## Order Parameters
+
+<ParamField path="marketIndex" type="number" required>
+  Market index (0 = SOL-PERP, 1 = BTC-PERP, etc.)
+</ParamField>
+
+<ParamField path="direction" type="PositionDirection" required>
+  `PositionDirection.LONG` or `PositionDirection.SHORT`
+</ParamField>
+
+<ParamField path="baseAssetAmount" type="BN" required>
+  Amount in base asset (use `BASE_PRECISION` for standard precision)
+</ParamField>
+
+<ParamField path="price" type="BN">
+  Limit price (use `PRICE_PRECISION` for $1 = 1,000,000)
+</ParamField>
+
+<ParamField path="marketType" type="MarketType">
+  `MarketType.PERP` or `MarketType.SPOT` (default: PERP)
+</ParamField>
+
+<ParamField path="reduceOnly" type="boolean">
+  If true, order can only reduce existing positions
+</ParamField>
+
+<ParamField path="postOnly" type="PostOnlyParams">
+  `MUST_POST_ONLY`, `TRY_POST_ONLY`, or `NONE`
+</ParamField>
+
+<ParamField path="immediateOrCancel" type="boolean">
+  If true, cancel unfilled portion immediately
+</ParamField>
+
+<ParamField path="triggerPrice" type="BN">
+  Price at which trigger order activates
+</ParamField>
+
+<ParamField path="triggerCondition" type="OrderTriggerCondition">
+  `ABOVE` or `BELOW` for trigger orders
+</ParamField>
+
+<ParamField path="oraclePriceOffset" type="BN">
+  Price offset from oracle for oracle orders
+</ParamField>
+
+<ParamField path="maxTs" type="BN">
+  Unix timestamp for order expiration
+</ParamField>
+
+<ParamField path="userOrderId" type="number">
+  Custom order ID for tracking (1-255)
+</ParamField>
+
+## Best Practices
+
+<Accordion title="Use appropriate order types">
+  - **Market orders**: When you need immediate execution
+  - **Limit orders**: When you want price control and maker fees
+  - **Trigger orders**: For risk management (stop-loss/take-profit)
+  - **Oracle orders**: For fair pricing relative to oracle
+</Accordion>
+
+<Accordion title="Set price limits on market orders">
+  ```typescript
+  // Protect against extreme slippage
+  const currentPrice = calculateBidAskPrice(
+    perpMarket.amm,
+    oracleData
+  )[1]; // Ask price
+  
+  const maxPrice = currentPrice.mul(new BN(105)).div(new BN(100)); // +5%
+  
+  const orderParams = getMarketOrderParams({
+    // ... other params
+    price: maxPrice,
+  });
+  ```
+</Accordion>
+
+<Accordion title="Use user order IDs for tracking">
+  ```typescript
+  // Track your orders with custom IDs
+  const orderParams = getMarketOrderParams({
+    // ... other params
+    userOrderId: 42,
+  });
+  
+  await driftClient.placePerpOrder(orderParams);
+  
+  // Later, find your order
+  const order = user.getOrderByUserOrderId(42);
+  if (order) {
+    console.log('Order status:', order.status);
+  }
+  ```
+</Accordion>
+
+<Accordion title="Handle order placement errors">
+  ```typescript
+  try {
+    await driftClient.placePerpOrder(orderParams);
+  } catch (error) {
+    if (error.message.includes('Insufficient collateral')) {
+      console.error('Need to deposit more collateral');
+    } else if (error.message.includes('Market orders paused')) {
+      console.error('Market is currently paused');
+    } else {
+      console.error('Order failed:', error);
+    }
+  }
+  ```
+</Accordion>
+
+## Examples
+
+### Opening a Leveraged Long Position
+
+```typescript
+// Open 10x leveraged SOL long with $1000 collateral
+const collateral = new BN(1000).mul(QUOTE_PRECISION);
+const leverage = 10;
+const notionalValue = collateral.mul(new BN(leverage));
+
+// Get current SOL price
+const solPrice = driftClient.getOracleDataForPerpMarket(0).price;
+const baseAmount = notionalValue.mul(PRICE_PRECISION).div(solPrice);
+
+const orderParams = getMarketOrderParams({
+  marketIndex: 0,
+  direction: PositionDirection.LONG,
+  baseAssetAmount: baseAmount,
+});
+
+await driftClient.placePerpOrder(orderParams);
+```
+
+### Closing a Position
+
+```typescript
+// Get your current position
+const position = user.getPerpPosition(0);
+
+if (position && position.baseAssetAmount.gt(ZERO)) {
+  // Close the entire position
+  const orderParams = getMarketOrderParams({
+    marketIndex: 0,
+    direction: findDirectionToClose(position),
+    baseAssetAmount: position.baseAssetAmount.abs(),
+    reduceOnly: true,
+  });
+  
+  await driftClient.placePerpOrder(orderParams);
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Modify Orders" icon="pen" href="/examples/modify-order">
+    Learn to modify existing orders
+  </Card>
+  <Card title="Cancel Orders" icon="xmark" href="/examples/cancel-order">
+    Cancel individual or all orders
+  </Card>
+  <Card title="Manage Positions" icon="chart-line" href="/guides/managing-positions">
+    Monitor and manage open positions
+  </Card>
+  <Card title="Order Params API" icon="code" href="/api/trading/order-params">
+    Complete order parameters reference
+  </Card>
+</CardGroup>

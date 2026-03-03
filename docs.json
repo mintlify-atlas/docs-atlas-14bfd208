@@ -1,122 +1,181 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Drift Protocol v2",
+  "theme": "aspen",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#8A2BE2",
+    "light": "#9D4EED",
+    "dark": "#7B1FD1"
   },
-  "favicon": "/favicon.svg",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/drift-labs/protocol-v2"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/drift-labs/protocol-v2"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Getting Started",
             "pages": [
-              "index",
-              "quickstart",
-              "development"
+              "introduction",
+              "installation",
+              "quickstart"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Core Concepts",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "concepts/overview",
+              "concepts/markets",
+              "concepts/positions",
+              "concepts/orders",
+              "concepts/margin",
+              "concepts/liquidations",
+              "concepts/oracles"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "SDK Guides",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "guides/initialization",
+              "guides/account-management",
+              "guides/placing-orders",
+              "guides/managing-positions",
+              "guides/account-subscriptions",
+              "guides/oracle-integration",
+              "guides/advanced-features"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Math & Calculations",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "math/precision",
+              "math/amm",
+              "math/margin-calculations",
+              "math/pnl",
+              "math/funding-rates"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Core Classes",
             "pages": [
-              "api-reference/introduction"
+              "api/drift-client",
+              "api/user",
+              "api/admin-client"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Account Subscribers",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/account-subscribers/overview",
+              "api/account-subscribers/websocket",
+              "api/account-subscribers/polling",
+              "api/account-subscribers/grpc"
+            ]
+          },
+          {
+            "group": "Market Data",
+            "pages": [
+              "api/markets/perp-markets",
+              "api/markets/spot-markets",
+              "api/markets/oracles"
+            ]
+          },
+          {
+            "group": "Trading",
+            "pages": [
+              "api/trading/order-params",
+              "api/trading/position-management",
+              "api/trading/dlob"
+            ]
+          },
+          {
+            "group": "Math Utilities",
+            "pages": [
+              "api/math/conversion",
+              "api/math/position",
+              "api/math/margin",
+              "api/math/liquidation"
+            ]
+          },
+          {
+            "group": "Types",
+            "pages": [
+              "api/types/accounts",
+              "api/types/orders",
+              "api/types/positions",
+              "api/types/enums"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Program",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "program/architecture",
+              "program/security"
+            ]
+          },
+          {
+            "group": "Instructions",
+            "pages": [
+              "program/instructions/user",
+              "program/instructions/trading",
+              "program/instructions/admin",
+              "program/instructions/keeper"
+            ]
+          },
+          {
+            "group": "State",
+            "pages": [
+              "program/state/user-account",
+              "program/state/market-accounts",
+              "program/state/state-account"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Examples",
+        "groups": [
+          {
+            "group": "Basic Examples",
+            "pages": [
+              "examples/connect-and-deposit",
+              "examples/place-market-order",
+              "examples/place-limit-order",
+              "examples/modify-order",
+              "examples/cancel-order"
+            ]
+          },
+          {
+            "group": "Advanced Examples",
+            "pages": [
+              "examples/market-making",
+              "examples/liquidation-bot",
+              "examples/arbitrage",
+              "examples/event-listening"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

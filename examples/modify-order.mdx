@@ -1,0 +1,128 @@
+---
+title: Modify Order
+description: Modify existing orders on Drift
+---
+
+Modify order price or size without canceling and replacing.
+
+## Complete Example
+
+```typescript modify-order.ts
+import {
+  DriftClient,
+  ModifyOrderParams,
+  BN,
+  PRICE_PRECISION,
+  BASE_PRECISION,
+} from '@drift-labs/sdk';
+
+async function modifyOrder(driftClient: DriftClient, orderId: number) {
+  // Get current order
+  const user = driftClient.getUser();
+  await user.fetchAccounts();
+  
+  const order = user.getOrder(orderId);
+  if (!order) {
+    console.error('Order not found');
+    return;
+  }
+
+  console.log('Current order:');
+  console.log('  Price:', convertToNumber(order.price, PRICE_PRECISION));
+  console.log('  Size:', convertToNumber(order.baseAssetAmount, BASE_PRECISION));
+
+  // Modify price and size
+  const modifyParams: ModifyOrderParams = {
+    price: new BN(148).mul(PRICE_PRECISION), // New price
+    baseAssetAmount: new BN(2).mul(BASE_PRECISION), // New size
+  };
+
+  console.log('\nModifying order...');
+  const txSig = await driftClient.modifyOrder(orderId, modifyParams);
+  console.log('Order modified:', txSig);
+
+  // Verify modification
+  await user.fetchAccounts();
+  const modifiedOrder = user.getOrder(orderId);
+  
+  if (modifiedOrder) {
+    console.log('\nModified order:');
+    console.log('  Price:', convertToNumber(modifiedOrder.price, PRICE_PRECISION));
+    console.log('  Size:', convertToNumber(modifiedOrder.baseAssetAmount, BASE_PRECISION));
+  }
+}
+
+export { modifyOrder };
+```
+
+## Modify by User Order ID
+
+If you set a custom user order ID:
+
+```typescript
+// Place order with custom ID
+const orderParams = getLimitOrderParams({
+  marketIndex: 0,
+  direction: PositionDirection.LONG,
+  baseAssetAmount: new BN(1).mul(BASE_PRECISION),
+  price: new BN(145).mul(PRICE_PRECISION),
+  userOrderId: 42, // Custom ID
+});
+
+await driftClient.placePerpOrder(orderParams);
+
+// Modify by user order ID
+await driftClient.modifyOrderByUserOrderId(
+  42, // user order ID
+  {
+    price: new BN(147).mul(PRICE_PRECISION),
+  }
+);
+```
+
+## Partial Modifications
+
+Modify only price:
+
+```typescript
+await driftClient.modifyOrder(orderId, {
+  price: new BN(150).mul(PRICE_PRECISION),
+});
+```
+
+Modify only size:
+
+```typescript
+await driftClient.modifyOrder(orderId, {
+  baseAssetAmount: new BN(3).mul(BASE_PRECISION),
+});
+```
+
+## Modify Multiple Parameters
+
+```typescript
+const modifyParams: ModifyOrderParams = {
+  price: new BN(148).mul(PRICE_PRECISION),
+  baseAssetAmount: new BN(2).mul(BASE_PRECISION),
+  reduceOnly: true,
+  postOnly: PostOnlyParams.TRY_POST_ONLY,
+  maxTs: new BN(Date.now() / 1000 + 7200), // 2 hours
+};
+
+await driftClient.modifyOrder(orderId, modifyParams);
+```
+
+<Note>
+  Modifying an order maintains its queue priority if the price improvement stays on the same side.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Cancel Order" href="/examples/cancel-order">
+    Cancel orders
+  </Card>
+  <Card title="Order Management" href="/guides/placing-orders">
+    Complete order guide
+  </Card>
+</CardGroup>

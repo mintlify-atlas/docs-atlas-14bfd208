@@ -1,0 +1,412 @@
+---
+title: Account Types
+description: Account type definitions for Drift Protocol v2
+---
+
+Account types represent the on-chain data structures used by Drift Protocol.
+
+## UserAccount
+
+The main account type for user positions, orders, and balances.
+
+<ResponseField name="authority" type="PublicKey" required>
+  The public key of the user's wallet that owns this account
+</ResponseField>
+
+<ResponseField name="delegate" type="PublicKey" required>
+  The public key of the delegate authorized to trade on behalf of the user
+</ResponseField>
+
+<ResponseField name="name" type="number[]" required>
+  Array representing the account name (max 32 bytes)
+</ResponseField>
+
+<ResponseField name="subAccountId" type="number" required>
+  The sub-account identifier (0-255)
+</ResponseField>
+
+<ResponseField name="spotPositions" type="SpotPosition[]" required>
+  Array of spot market positions held by the user
+</ResponseField>
+
+<ResponseField name="perpPositions" type="PerpPosition[]" required>
+  Array of perpetual market positions held by the user
+</ResponseField>
+
+<ResponseField name="orders" type="Order[]" required>
+  Array of open orders for this user
+</ResponseField>
+
+<ResponseField name="status" type="number" required>
+  User status flags (see UserStatus enum)
+</ResponseField>
+
+<ResponseField name="nextLiquidationId" type="number" required>
+  The next liquidation identifier to be used
+</ResponseField>
+
+<ResponseField name="nextOrderId" type="number" required>
+  The next order identifier to be used
+</ResponseField>
+
+<ResponseField name="maxMarginRatio" type="number" required>
+  Maximum margin ratio for the account
+</ResponseField>
+
+<ResponseField name="settledPerpPnl" type="BN" required>
+  Settled perpetual profit and loss
+</ResponseField>
+
+<ResponseField name="totalDeposits" type="BN" required>
+  Total deposits made to this account
+</ResponseField>
+
+<ResponseField name="totalWithdraws" type="BN" required>
+  Total withdrawals made from this account
+</ResponseField>
+
+<ResponseField name="isMarginTradingEnabled" type="boolean" required>
+  Whether margin trading is enabled for this account
+</ResponseField>
+
+<ResponseField name="idle" type="boolean" required>
+  Whether the account is idle (no positions or orders)
+</ResponseField>
+
+<ResponseField name="openOrders" type="number" required>
+  Number of open orders
+</ResponseField>
+
+<ResponseField name="hasOpenOrder" type="boolean" required>
+  Whether the account has any open orders
+</ResponseField>
+
+<ResponseField name="marginMode" type="MarginMode" required>
+  The margin mode for this account (DEFAULT, HIGH_LEVERAGE, etc.)
+</ResponseField>
+
+```typescript
+export type UserAccount = {
+  authority: PublicKey;
+  delegate: PublicKey;
+  name: number[];
+  subAccountId: number;
+  spotPositions: SpotPosition[];
+  perpPositions: PerpPosition[];
+  orders: Order[];
+  status: number;
+  nextLiquidationId: number;
+  nextOrderId: number;
+  maxMarginRatio: number;
+  lastAddPerpLpSharesTs: BN;
+  settledPerpPnl: BN;
+  totalDeposits: BN;
+  totalWithdraws: BN;
+  totalSocialLoss: BN;
+  cumulativePerpFunding: BN;
+  cumulativeSpotFees: BN;
+  liquidationMarginFreed: BN;
+  lastActiveSlot: BN;
+  isMarginTradingEnabled: boolean;
+  idle: boolean;
+  openOrders: number;
+  hasOpenOrder: boolean;
+  openAuctions: number;
+  hasOpenAuction: boolean;
+  lastFuelBonusUpdateTs: number;
+  marginMode: MarginMode;
+  poolId: number;
+};
+```
+
+## PerpMarketAccount
+
+Represents a perpetual futures market.
+
+<ResponseField name="status" type="MarketStatus" required>
+  Current market status (ACTIVE, PAUSED, etc.)
+</ResponseField>
+
+<ResponseField name="contractType" type="ContractType" required>
+  Type of contract (PERPETUAL, FUTURE, PREDICTION)
+</ResponseField>
+
+<ResponseField name="contractTier" type="ContractTier" required>
+  Risk tier of the contract (A, B, C, SPECULATIVE, etc.)
+</ResponseField>
+
+<ResponseField name="marketIndex" type="number" required>
+  Unique identifier for this market
+</ResponseField>
+
+<ResponseField name="pubkey" type="PublicKey" required>
+  The public key of this market account
+</ResponseField>
+
+<ResponseField name="name" type="number[]" required>
+  Market name (max 32 bytes)
+</ResponseField>
+
+<ResponseField name="amm" type="AMM" required>
+  Automated Market Maker configuration and state
+</ResponseField>
+
+<ResponseField name="numberOfUsers" type="number" required>
+  Total number of users with positions in this market
+</ResponseField>
+
+<ResponseField name="marginRatioInitial" type="number" required>
+  Initial margin requirement ratio
+</ResponseField>
+
+<ResponseField name="marginRatioMaintenance" type="number" required>
+  Maintenance margin requirement ratio
+</ResponseField>
+
+<ResponseField name="liquidatorFee" type="number" required>
+  Fee paid to liquidators
+</ResponseField>
+
+<ResponseField name="ifLiquidationFee" type="number" required>
+  Fee paid to insurance fund on liquidation
+</ResponseField>
+
+```typescript
+export type PerpMarketAccount = {
+  status: MarketStatus;
+  contractType: ContractType;
+  contractTier: ContractTier;
+  expiryTs: BN;
+  expiryPrice: BN;
+  marketIndex: number;
+  pubkey: PublicKey;
+  name: number[];
+  amm: AMM;
+  numberOfUsersWithBase: number;
+  numberOfUsers: number;
+  marginRatioInitial: number;
+  marginRatioMaintenance: number;
+  nextFillRecordId: BN;
+  nextFundingRateRecordId: BN;
+  nextCurveRecordId: BN;
+  pnlPool: PoolBalance;
+  liquidatorFee: number;
+  ifLiquidationFee: number;
+  imfFactor: number;
+  unrealizedPnlImfFactor: number;
+  // ... additional fields
+};
+```
+
+## SpotMarketAccount
+
+Represents a spot market for trading tokens.
+
+<ResponseField name="status" type="MarketStatus" required>
+  Current market status
+</ResponseField>
+
+<ResponseField name="assetTier" type="AssetTier" required>
+  Asset tier classification (COLLATERAL, PROTECTED, CROSS, ISOLATED)
+</ResponseField>
+
+<ResponseField name="marketIndex" type="number" required>
+  Unique identifier for this spot market
+</ResponseField>
+
+<ResponseField name="pubkey" type="PublicKey" required>
+  The public key of this market account
+</ResponseField>
+
+<ResponseField name="mint" type="PublicKey" required>
+  The SPL token mint for this market
+</ResponseField>
+
+<ResponseField name="vault" type="PublicKey" required>
+  The vault account holding tokens for this market
+</ResponseField>
+
+<ResponseField name="oracle" type="PublicKey" required>
+  The oracle account providing price data
+</ResponseField>
+
+<ResponseField name="oracleSource" type="OracleSource" required>
+  The type of oracle being used (PYTH, SWITCHBOARD, etc.)
+</ResponseField>
+
+<ResponseField name="decimals" type="number" required>
+  Number of decimals for the token
+</ResponseField>
+
+<ResponseField name="depositBalance" type="BN" required>
+  Total deposits in this market
+</ResponseField>
+
+<ResponseField name="borrowBalance" type="BN" required>
+  Total borrows in this market
+</ResponseField>
+
+<ResponseField name="initialAssetWeight" type="number" required>
+  Initial collateral weight for this asset
+</ResponseField>
+
+<ResponseField name="maintenanceAssetWeight" type="number" required>
+  Maintenance collateral weight for this asset
+</ResponseField>
+
+```typescript
+export type SpotMarketAccount = {
+  status: MarketStatus;
+  assetTier: AssetTier;
+  name: number[];
+  marketIndex: number;
+  pubkey: PublicKey;
+  mint: PublicKey;
+  vault: PublicKey;
+  oracle: PublicKey;
+  oracleSource: OracleSource;
+  historicalOracleData: HistoricalOracleData;
+  historicalIndexData: HistoricalIndexData;
+  insuranceFund: {
+    vault: PublicKey;
+    totalShares: BN;
+    userShares: BN;
+    sharesBase: BN;
+    unstakingPeriod: BN;
+    lastRevenueSettleTs: BN;
+    revenueSettlePeriod: BN;
+    totalFactor: number;
+    userFactor: number;
+  };
+  decimals: number;
+  optimalUtilization: number;
+  optimalBorrowRate: number;
+  maxBorrowRate: number;
+  cumulativeDepositInterest: BN;
+  cumulativeBorrowInterest: BN;
+  depositBalance: BN;
+  borrowBalance: BN;
+  initialAssetWeight: number;
+  maintenanceAssetWeight: number;
+  initialLiabilityWeight: number;
+  maintenanceLiabilityWeight: number;
+  liquidatorFee: number;
+  // ... additional fields
+};
+```
+
+## UserStatsAccount
+
+Tracks user statistics and fee information.
+
+<ResponseField name="authority" type="PublicKey" required>
+  The user's authority public key
+</ResponseField>
+
+<ResponseField name="referrer" type="PublicKey" required>
+  The referrer's public key
+</ResponseField>
+
+<ResponseField name="numberOfSubAccounts" type="number" required>
+  Number of sub-accounts currently active
+</ResponseField>
+
+<ResponseField name="numberOfSubAccountsCreated" type="number" required>
+  Total number of sub-accounts ever created
+</ResponseField>
+
+<ResponseField name="makerVolume30D" type="BN" required>
+  Maker volume over the last 30 days
+</ResponseField>
+
+<ResponseField name="takerVolume30D" type="BN" required>
+  Taker volume over the last 30 days
+</ResponseField>
+
+<ResponseField name="fees" type="object" required>
+  Fee statistics for this user
+</ResponseField>
+
+```typescript
+export type UserStatsAccount = {
+  numberOfSubAccounts: number;
+  numberOfSubAccountsCreated: number;
+  makerVolume30D: BN;
+  takerVolume30D: BN;
+  fillerVolume30D: BN;
+  lastMakerVolume30DTs: BN;
+  lastTakerVolume30DTs: BN;
+  lastFillerVolume30DTs: BN;
+  fees: {
+    totalFeePaid: BN;
+    totalFeeRebate: BN;
+    totalTokenDiscount: BN;
+    totalRefereeDiscount: BN;
+    totalReferrerReward: BN;
+    current_epoch_referrer_reward: BN;
+  };
+  referrer: PublicKey;
+  referrerStatus: number;
+  authority: PublicKey;
+  ifStakedQuoteAssetAmount: BN;
+  // ... additional fields
+};
+```
+
+## StateAccount
+
+The global state account for the Drift Protocol.
+
+<ResponseField name="admin" type="PublicKey" required>
+  The admin authority for the protocol
+</ResponseField>
+
+<ResponseField name="exchangeStatus" type="number" required>
+  Global exchange status flags
+</ResponseField>
+
+<ResponseField name="numberOfMarkets" type="number" required>
+  Total number of perpetual markets
+</ResponseField>
+
+<ResponseField name="numberOfSpotMarkets" type="number" required>
+  Total number of spot markets
+</ResponseField>
+
+<ResponseField name="perpFeeStructure" type="FeeStructure" required>
+  Fee structure for perpetual markets
+</ResponseField>
+
+<ResponseField name="spotFeeStructure" type="FeeStructure" required>
+  Fee structure for spot markets
+</ResponseField>
+
+```typescript
+export type StateAccount = {
+  admin: PublicKey;
+  exchangeStatus: number;
+  whitelistMint: PublicKey;
+  discountMint: PublicKey;
+  oracleGuardRails: OracleGuardRails;
+  numberOfAuthorities: BN;
+  numberOfSubAccounts: BN;
+  numberOfMarkets: number;
+  numberOfSpotMarkets: number;
+  minPerpAuctionDuration: number;
+  defaultMarketOrderTimeInForce: number;
+  defaultSpotAuctionDuration: number;
+  liquidationMarginBufferRatio: number;
+  settlementDuration: number;
+  maxNumberOfSubAccounts: number;
+  signer: PublicKey;
+  signerNonce: number;
+  srmVault: PublicKey;
+  perpFeeStructure: FeeStructure;
+  spotFeeStructure: FeeStructure;
+  lpCooldownTime: BN;
+  initialPctToLiquidate: number;
+  liquidationDuration: number;
+  maxInitializeUserFee: number;
+  featureBitFlags: number;
+};
+```

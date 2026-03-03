@@ -1,0 +1,549 @@
+---
+title: "Margin Calculations"
+description: "Functions for calculating margin requirements, collateral values, and liquidation prices"
+---
+
+The margin calculation utilities provide functions for determining margin requirements, calculating collateral values, and computing liquidation prices for positions.
+
+## Margin Weight Functions
+
+### calculateSizePremiumLiabilityWeight
+
+Calculates the size-adjusted liability weight for a position.
+
+```typescript
+calculateSizePremiumLiabilityWeight(
+  size: BN,
+  imfFactor: BN,
+  liabilityWeight: BN,
+  precision: BN,
+  isBounded?: boolean
+): BN
+```
+
+<ParamField path="size" type="BN" required>
+  Position size in AMM_RESERVE_PRECISION
+</ParamField>
+
+<ParamField path="imfFactor" type="BN" required>
+  Initial margin fraction factor
+</ParamField>
+
+<ParamField path="liabilityWeight" type="BN" required>
+  Base liability weight
+</ParamField>
+
+<ParamField path="precision" type="BN" required>
+  Precision to use for calculations
+</ParamField>
+
+<ParamField path="isBounded" type="boolean" default="true">
+  Whether to bound the result to the base liability weight
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Size-adjusted liability weight
+</ResponseField>
+
+#### Usage Example
+
+```typescript
+import { calculateSizePremiumLiabilityWeight } from '@drift-labs/sdk';
+import { AMM_RESERVE_PRECISION } from '@drift-labs/sdk';
+
+const size = new BN(1000).mul(AMM_RESERVE_PRECISION);
+const imfFactor = market.imfFactor;
+const liabilityWeight = market.marginRatioInitial;
+
+const adjustedWeight = calculateSizePremiumLiabilityWeight(
+  size,
+  imfFactor,
+  liabilityWeight,
+  AMM_RESERVE_PRECISION,
+  true
+);
+```
+
+### calculateSizeDiscountAssetWeight
+
+Calculates the size-adjusted asset weight for a position.
+
+```typescript
+calculateSizeDiscountAssetWeight(
+  size: BN,
+  imfFactor: BN,
+  assetWeight: BN
+): BN
+```
+
+<ParamField path="size" type="BN" required>
+  Position size in AMM_RESERVE_PRECISION
+</ParamField>
+
+<ParamField path="imfFactor" type="BN" required>
+  Initial margin fraction factor
+</ParamField>
+
+<ParamField path="assetWeight" type="BN" required>
+  Base asset weight
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Size-adjusted asset weight (minimum of base weight and calculated discount weight)
+</ResponseField>
+
+## Oracle Price Functions
+
+### calculateOraclePriceForPerpMargin
+
+Calculates the oracle price adjusted for margin calculations with spread and confidence intervals.
+
+```typescript
+calculateOraclePriceForPerpMargin(
+  perpPosition: PerpPosition,
+  market: PerpMarketAccount,
+  oraclePriceData: OraclePriceData
+): BN
+```
+
+<ParamField path="perpPosition" type="PerpPosition" required>
+  The perpetual position
+</ParamField>
+
+<ParamField path="market" type="PerpMarketAccount" required>
+  The perpetual market account
+</ParamField>
+
+<ParamField path="oraclePriceData" type="OraclePriceData" required>
+  Oracle price data including confidence interval
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Adjusted oracle price for margin calculations
+</ResponseField>
+
+#### Usage Example
+
+```typescript
+import { calculateOraclePriceForPerpMargin } from '@drift-labs/sdk';
+
+const position = user.getPerpPosition(0);
+const market = driftClient.getPerpMarketAccount(0);
+const oracleData = driftClient.getOracleDataForPerpMarket(0);
+
+const marginPrice = calculateOraclePriceForPerpMargin(
+  position,
+  market,
+  oracleData
+);
+
+console.log('Margin price:', convertToNumber(marginPrice, PRICE_PRECISION));
+```
+
+## Base Asset Value Functions
+
+### calculateBaseAssetValueWithOracle
+
+Calculates the base asset value using oracle price. For prediction markets, this differs from liability value.
+
+```typescript
+calculateBaseAssetValueWithOracle(
+  market: PerpMarketAccount,
+  perpPosition: PerpPosition,
+  oraclePriceData: Pick<OraclePriceData, 'price'>,
+  includeOpenOrders?: boolean
+): BN
+```
+
+<ParamField path="market" type="PerpMarketAccount" required>
+  The perpetual market account
+</ParamField>
+
+<ParamField path="perpPosition" type="PerpPosition" required>
+  The perpetual position
+</ParamField>
+
+<ParamField path="oraclePriceData" type="Pick<OraclePriceData, 'price'>" required>
+  Oracle price data
+</ParamField>
+
+<ParamField path="includeOpenOrders" type="boolean" default="false">
+  Whether to include open orders in calculation
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Base asset value in quote precision
+</ResponseField>
+
+#### Usage Example
+
+```typescript
+import { calculateBaseAssetValueWithOracle } from '@drift-labs/sdk';
+
+const market = driftClient.getPerpMarketAccount(0);
+const position = user.getPerpPosition(0);
+const oracleData = driftClient.getOracleDataForPerpMarket(0);
+
+// Without open orders
+const value = calculateBaseAssetValueWithOracle(
+  market,
+  position,
+  oracleData
+);
+
+// With open orders
+const worstCaseValue = calculateBaseAssetValueWithOracle(
+  market,
+  position,
+  oracleData,
+  true
+);
+```
+
+### calculateWorstCaseBaseAssetAmount
+
+Calculates the worst-case base asset amount including open orders.
+
+```typescript
+calculateWorstCaseBaseAssetAmount(
+  perpPosition: PerpPosition,
+  perpMarket: PerpMarketAccount,
+  oraclePrice: BN
+): BN
+```
+
+<ParamField path="perpPosition" type="PerpPosition" required>
+  The perpetual position
+</ParamField>
+
+<ParamField path="perpMarket" type="PerpMarketAccount" required>
+  The perpetual market account
+</ParamField>
+
+<ParamField path="oraclePrice" type="BN" required>
+  Oracle price
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Worst-case base asset amount
+</ResponseField>
+
+### calculateWorstCasePerpLiabilityValue
+
+Calculates the worst-case liability value for a position.
+
+```typescript
+calculateWorstCasePerpLiabilityValue(
+  perpPosition: PerpPosition,
+  perpMarket: PerpMarketAccount,
+  oraclePrice: BN,
+  includeOpenOrders?: boolean
+): { worstCaseBaseAssetAmount: BN; worstCaseLiabilityValue: BN }
+```
+
+<ParamField path="perpPosition" type="PerpPosition" required>
+  The perpetual position
+</ParamField>
+
+<ParamField path="perpMarket" type="PerpMarketAccount" required>
+  The perpetual market account
+</ParamField>
+
+<ParamField path="oraclePrice" type="BN" required>
+  Oracle price
+</ParamField>
+
+<ParamField path="includeOpenOrders" type="boolean" default="true">
+  Whether to include open orders
+</ParamField>
+
+<ResponseField name="return" type="{ worstCaseBaseAssetAmount: BN; worstCaseLiabilityValue: BN }">
+  Object containing worst-case base asset amount and liability value
+</ResponseField>
+
+### calculatePerpLiabilityValue
+
+Calculates the liability value for a given base asset amount.
+
+```typescript
+calculatePerpLiabilityValue(
+  baseAssetAmount: BN,
+  price: BN,
+  isPredictionMarket: boolean
+): BN
+```
+
+<ParamField path="baseAssetAmount" type="BN" required>
+  Base asset amount
+</ParamField>
+
+<ParamField path="price" type="BN" required>
+  Oracle price
+</ParamField>
+
+<ParamField path="isPredictionMarket" type="boolean" required>
+  Whether this is a prediction market
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Liability value. For prediction markets, shorts use (1 - price) * base
+</ResponseField>
+
+## Margin Requirement Functions
+
+### calculateMarginUSDCRequiredForTrade
+
+Calculates the margin required to open a trade in USDC.
+
+```typescript
+calculateMarginUSDCRequiredForTrade(
+  driftClient: DriftClient,
+  targetMarketIndex: number,
+  baseSize: BN,
+  userMaxMarginRatio?: number,
+  userHighLeverageMode?: boolean,
+  entryPrice?: BN
+): BN
+```
+
+<ParamField path="driftClient" type="DriftClient" required>
+  The Drift client instance
+</ParamField>
+
+<ParamField path="targetMarketIndex" type="number" required>
+  Market index for the trade
+</ParamField>
+
+<ParamField path="baseSize" type="BN" required>
+  Size of the trade
+</ParamField>
+
+<ParamField path="userMaxMarginRatio" type="number">
+  User's maximum margin ratio
+</ParamField>
+
+<ParamField path="userHighLeverageMode" type="boolean">
+  Whether user is in high leverage mode
+</ParamField>
+
+<ParamField path="entryPrice" type="BN">
+  Expected entry price (uses oracle price if not provided)
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Margin required in USDC
+</ResponseField>
+
+#### Usage Example
+
+```typescript
+import { calculateMarginUSDCRequiredForTrade } from '@drift-labs/sdk';
+import { BASE_PRECISION } from '@drift-labs/sdk';
+
+const marketIndex = 0; // SOL-PERP
+const baseSize = new BN(10).mul(BASE_PRECISION); // 10 SOL
+
+const marginRequired = calculateMarginUSDCRequiredForTrade(
+  driftClient,
+  marketIndex,
+  baseSize
+);
+
+console.log('Margin required:', convertToNumber(marginRequired, QUOTE_PRECISION), 'USDC');
+```
+
+### calculateCollateralDepositRequiredForTrade
+
+Calculates the collateral deposit required for a trade in a specific collateral asset.
+
+```typescript
+calculateCollateralDepositRequiredForTrade(
+  driftClient: DriftClient,
+  targetMarketIndex: number,
+  baseSize: BN,
+  collateralIndex: number,
+  userMaxMarginRatio?: number,
+  userHighLeverageMode?: boolean,
+  estEntryPrice?: BN
+): BN
+```
+
+<ParamField path="driftClient" type="DriftClient" required>
+  The Drift client instance
+</ParamField>
+
+<ParamField path="targetMarketIndex" type="number" required>
+  Market index for the trade
+</ParamField>
+
+<ParamField path="baseSize" type="BN" required>
+  Size of the trade
+</ParamField>
+
+<ParamField path="collateralIndex" type="number" required>
+  Spot market index for the collateral asset
+</ParamField>
+
+<ParamField path="userMaxMarginRatio" type="number">
+  User's maximum margin ratio
+</ParamField>
+
+<ParamField path="userHighLeverageMode" type="boolean">
+  Whether user is in high leverage mode
+</ParamField>
+
+<ParamField path="estEntryPrice" type="BN">
+  Estimated entry price
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Collateral required in the precision of the target collateral market
+</ResponseField>
+
+### calculateCollateralValueOfDeposit
+
+Calculates the collateral value of a deposit.
+
+```typescript
+calculateCollateralValueOfDeposit(
+  driftClient: DriftClient,
+  collateralIndex: number,
+  baseSize: BN
+): BN
+```
+
+<ParamField path="driftClient" type="DriftClient" required>
+  The Drift client instance
+</ParamField>
+
+<ParamField path="collateralIndex" type="number" required>
+  Spot market index for the collateral
+</ParamField>
+
+<ParamField path="baseSize" type="BN" required>
+  Amount to deposit in base units
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Collateral value in QUOTE_PRECISION
+</ResponseField>
+
+## Liquidation Price Functions
+
+### calculateLiquidationPrice
+
+Calculates the liquidation price for a position.
+
+```typescript
+calculateLiquidationPrice(
+  freeCollateral: BN,
+  freeCollateralDelta: BN,
+  oraclePrice: BN
+): BN
+```
+
+<ParamField path="freeCollateral" type="BN" required>
+  Current free collateral
+</ParamField>
+
+<ParamField path="freeCollateralDelta" type="BN" required>
+  Change in free collateral per price change
+</ParamField>
+
+<ParamField path="oraclePrice" type="BN" required>
+  Current oracle price
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Liquidation price. Returns -1 if calculated price is negative
+</ResponseField>
+
+#### Usage Example
+
+```typescript
+import { calculateLiquidationPrice } from '@drift-labs/sdk';
+
+const freeCollateral = user.getFreeCollateral();
+const freeCollateralDelta = calculateFreeCollateralDelta(user, position);
+const oraclePrice = driftClient.getOracleDataForPerpMarket(0).price;
+
+const liqPrice = calculateLiquidationPrice(
+  freeCollateral,
+  freeCollateralDelta,
+  oraclePrice
+);
+
+if (liqPrice.gt(new BN(0))) {
+  console.log('Liquidation price:', convertToNumber(liqPrice, PRICE_PRECISION));
+} else {
+  console.log('No liquidation risk');
+}
+```
+
+## User Position Functions
+
+### calculateUserMaxPerpOrderSize
+
+Calculates the maximum order size a user can place.
+
+```typescript
+calculateUserMaxPerpOrderSize(
+  driftClient: DriftClient,
+  userAccountKey: PublicKey,
+  userAccount: UserAccount,
+  targetMarketIndex: number,
+  tradeSide: PositionDirection
+): { tradeSize: BN; oppositeSideTradeSize: BN }
+```
+
+<ParamField path="driftClient" type="DriftClient" required>
+  The Drift client instance
+</ParamField>
+
+<ParamField path="userAccountKey" type="PublicKey" required>
+  User account public key
+</ParamField>
+
+<ParamField path="userAccount" type="UserAccount" required>
+  User account data
+</ParamField>
+
+<ParamField path="targetMarketIndex" type="number" required>
+  Market index for the trade
+</ParamField>
+
+<ParamField path="tradeSide" type="PositionDirection" required>
+  Direction of the trade (LONG or SHORT)
+</ParamField>
+
+<ResponseField name="return" type="{ tradeSize: BN; oppositeSideTradeSize: BN }">
+  Object containing max trade size for requested side and opposite side
+</ResponseField>
+
+### calcHighLeverageModeInitialMarginRatioFromSize
+
+Calculates the initial margin ratio for high leverage mode based on position size.
+
+```typescript
+calcHighLeverageModeInitialMarginRatioFromSize(
+  preSizeAdjMarginRatio: BN,
+  sizeAdjMarginRatio: BN,
+  defaultMarginRatio: BN
+): BN
+```
+
+<ParamField path="preSizeAdjMarginRatio" type="BN" required>
+  Margin ratio before size adjustment
+</ParamField>
+
+<ParamField path="sizeAdjMarginRatio" type="BN" required>
+  Size-adjusted margin ratio
+</ParamField>
+
+<ParamField path="defaultMarginRatio" type="BN" required>
+  Default margin ratio for the market
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Calculated initial margin ratio for high leverage mode
+</ResponseField>

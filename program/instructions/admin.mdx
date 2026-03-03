@@ -1,0 +1,51 @@
+---
+title: Admin Instructions
+description: Administrative instructions in Drift Protocol
+---
+
+Admin instructions are restricted to protocol administrators for managing markets and global parameters.
+
+## Market Management
+
+### initialize_perp_market
+
+Creates a new perpetual market.
+
+```rust
+pub fn initialize_perp_market(
+    ctx: Context<InitializePerpMarket>,
+    market_index: u16,
+    // ... additional params
+) -> Result<()>
+```
+
+### update_perp_market
+
+Updates perpetual market parameters.
+
+## Parameter Updates
+
+### update_oracle_guard_rails
+
+Updates oracle validation parameters.
+
+### update_fee_structure
+
+Modifies fee structure for trading.
+
+## Access Control
+
+Admin instructions require the protocol admin signature.
+
+<Warning>
+  Admin instructions are restricted and require governance approval.
+</Warning>
+
+<CardGroup cols={2}>
+  <Card title="Architecture" href="/program/architecture">
+    Program overview
+  </Card>
+  <Card title="AdminClient API" href="/api/admin-client">
+    Admin SDK methods
+  </Card>
+</CardGroup>

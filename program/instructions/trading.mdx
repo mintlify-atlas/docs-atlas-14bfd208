@@ -1,0 +1,69 @@
+---
+title: Trading Instructions
+description: Trading operation instructions in Drift Protocol
+---
+
+Trading instructions handle order placement, modification, and cancellation.
+
+## Core Instructions
+
+### place_perp_order
+
+Places a perpetual futures order.
+
+```rust
+pub fn place_perp_order(
+    ctx: Context<PlaceOrder>,
+    params: OrderParams,
+) -> Result<()>
+```
+
+<ParamField path="params" type="OrderParams" required>
+  Order parameters including price, size, type, and conditions
+</ParamField>
+
+### cancel_order
+
+Cancels an existing order.
+
+```rust
+pub fn cancel_order(
+    ctx: Context<CancelOrder>,
+    order_id: Option<u32>,
+) -> Result<()>
+```
+
+### modify_order
+
+Modifies an existing order.
+
+```rust
+pub fn modify_order(
+    ctx: Context<CancelOrder>,
+    order_id: Option<u32>,
+    modify_order_params: ModifyOrderParams,
+) -> Result<()>
+```
+
+### place_and_take_perp_order
+
+Places an order and immediately attempts to fill it.
+
+```rust
+pub fn place_and_take_perp_order(
+    ctx: Context<PlaceAndTake>,
+    params: OrderParams,
+    success_condition: Option<u32>,
+) -> Result<()>
+```
+
+## SDK Usage
+
+<CardGroup cols={2}>
+  <Card title="Placing Orders" href="/guides/placing-orders">
+    Order placement guide
+  </Card>
+  <Card title="Order Params API" href="/api/trading/order-params">
+    Order parameter reference
+  </Card>
+</CardGroup>

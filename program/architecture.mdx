@@ -1,0 +1,86 @@
+---
+title: Program Architecture
+description: Overview of Drift Protocol's on-chain program architecture
+---
+
+Drift Protocol is built using the Anchor framework on Solana. The program implements a cross-margined derivatives exchange with perpetual futures and spot markets.
+
+## Program ID
+
+**Mainnet & Devnet**: `dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH`
+
+## Core Components
+
+### State Accounts
+
+- **State**: Global protocol configuration and parameters
+- **PerpMarket**: Individual perpetual market configuration and AMM state
+- **SpotMarket**: Spot market configuration for collateral assets
+- **User**: User trading account with positions and orders
+- **UserStats**: User statistics and fee tiers
+
+### Controllers
+
+- **Position Controller**: Manages perpetual and spot positions
+- **Order Controller**: Handles order placement and matching
+- **AMM Controller**: Controls automated market maker operations
+- **Liquidation Controller**: Executes liquidations
+- **Funding Controller**: Calculates and applies funding rates
+
+### Instructions
+
+All instructions are implemented in the `instructions/` module:
+- **User instructions**: Account management, deposits, withdrawals
+- **Trading instructions**: Place, modify, cancel orders
+- **Admin instructions**: Market management, parameter updates
+- **Keeper instructions**: Fill orders, liquidate accounts, update funding
+
+## Program Features
+
+<CardGroup cols={2}>
+  <Card title="Cross-Margin" icon="link">
+    Single collateral pool supports all positions
+  </Card>
+  <Card title="vAMM" icon="chart-line">
+    Virtual automated market maker for liquidity
+  </Card>
+  <Card title="DLOB" icon="book">
+    Decentralized limit order book
+  </Card>
+  <Card title="Oracle Integration" icon="eye">
+    Pyth and Switchboard price feeds
+  </Card>
+</CardGroup>
+
+## Architecture Overview
+
+The Drift program is structured with:
+
+1. **Entry Point**: Anchor program entrypoint with custom discriminator handling
+2. **State Management**: Accounts stored on-chain with versioned upgrades
+3. **Math Library**: Precision-based calculations for positions, margins, and PnL
+4. **Validation**: Guard rails for oracle data, margin requirements, and risk limits
+
+## Security
+
+- Audited by multiple firms (see AUDIT.md)
+- Bug bounty program active
+- Program upgrades require governance
+- All critical operations use oracle guard rails
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Instructions" href="/program/instructions/user">
+    Program instruction reference
+  </Card>
+  <Card title="State" href="/program/state/user-account">
+    Account structures
+  </Card>
+  <Card title="Security" href="/program/security">
+    Security considerations
+  </Card>
+  <Card title="SDK" href="/guides/initialization">
+    Use the TypeScript SDK
+  </Card>
+</CardGroup>

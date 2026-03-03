@@ -1,0 +1,421 @@
+---
+title: "Position Calculations"
+description: "Functions for calculating position values, PnL, funding, and other position metrics"
+---
+
+The position calculation utilities provide comprehensive functions for calculating position values, profit and loss, funding payments, and other position-related metrics.
+
+## Position Value Functions
+
+### calculateBaseAssetValue
+
+Calculates the market value of closing an entire position using AMM reserves.
+
+```typescript
+calculateBaseAssetValue(
+  market: PerpMarketAccount,
+  userPosition: PerpPosition,
+  mmOraclePriceData: MMOraclePriceData,
+  useSpread?: boolean,
+  skipUpdate?: boolean,
+  latestSlot?: BN
+): BN
+```
+
+<ParamField path="market" type="PerpMarketAccount" required>
+  The perpetual market account
+</ParamField>
+
+<ParamField path="userPosition" type="PerpPosition" required>
+  The user's position
+</ParamField>
+
+<ParamField path="mmOraclePriceData" type="MMOraclePriceData" required>
+  The oracle price data
+</ParamField>
+
+<ParamField path="useSpread" type="boolean" default="true">
+  Whether to include spread in calculation
+</ParamField>
+
+<ParamField path="skipUpdate" type="boolean" default="false">
+  Whether to skip AMM updates
+</ParamField>
+
+<ParamField path="latestSlot" type="BN">
+  The latest slot for calculations
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Base asset value in QUOTE_PRECISION
+</ResponseField>
+
+#### Usage Example
+
+```typescript
+import { calculateBaseAssetValue } from '@drift-labs/sdk';
+
+const market = driftClient.getPerpMarketAccount(0);
+const position = user.getPerpPosition(0);
+const oracleData = driftClient.getOracleDataForPerpMarket(0);
+
+const value = calculateBaseAssetValue(
+  market,
+  position,
+  oracleData,
+  true // use spread
+);
+
+console.log('Position value:', convertToNumber(value, QUOTE_PRECISION));
+```
+
+## PnL Calculation Functions
+
+### calculatePositionPNL
+
+Calculates position PnL as: BaseAssetAmount * (Avg Exit Price - Avg Entry Price).
+
+```typescript
+calculatePositionPNL(
+  market: PerpMarketAccount,
+  perpPosition: PerpPosition,
+  withFunding?: boolean,
+  oraclePriceData: Pick<OraclePriceData, 'price'>
+): BN
+```
+
+<ParamField path="market" type="PerpMarketAccount" required>
+  The perpetual market account
+</ParamField>
+
+<ParamField path="perpPosition" type="PerpPosition" required>
+  The perpetual position
+</ParamField>
+
+<ParamField path="withFunding" type="boolean" default="false">
+  Whether to include unrealized funding payment PnL
+</ParamField>
+
+<ParamField path="oraclePriceData" type="Pick<OraclePriceData, 'price'>" required>
+  Oracle price data
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Position PnL in QUOTE_PRECISION
+</ResponseField>
+
+#### Usage Example
+
+```typescript
+import { calculatePositionPNL } from '@drift-labs/sdk';
+
+const market = driftClient.getPerpMarketAccount(0);
+const position = user.getPerpPosition(0);
+const oracleData = driftClient.getOracleDataForPerpMarket(0);
+
+// PnL without funding
+const pnl = calculatePositionPNL(market, position, false, oracleData);
+console.log('PnL:', convertToNumber(pnl, QUOTE_PRECISION));
+
+// PnL with funding
+const pnlWithFunding = calculatePositionPNL(market, position, true, oracleData);
+console.log('PnL with funding:', convertToNumber(pnlWithFunding, QUOTE_PRECISION));
+```
+
+### calculateClaimablePnl
+
+Calculates the claimable (realizable) PnL for a position, accounting for pool limits.
+
+```typescript
+calculateClaimablePnl(
+  market: PerpMarketAccount,
+  spotMarket: SpotMarketAccount,
+  perpPosition: PerpPosition,
+  oraclePriceData: Pick<OraclePriceData, 'price'>
+): BN
+```
+
+<ParamField path="market" type="PerpMarketAccount" required>
+  The perpetual market account
+</ParamField>
+
+<ParamField path="spotMarket" type="SpotMarketAccount" required>
+  The spot market account
+</ParamField>
+
+<ParamField path="perpPosition" type="PerpPosition" required>
+  The perpetual position
+</ParamField>
+
+<ParamField path="oraclePriceData" type="Pick<OraclePriceData, 'price'>" required>
+  Oracle price data
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Claimable PnL in QUOTE_PRECISION
+</ResponseField>
+
+## Funding Calculation Functions
+
+### calculateUnsettledFundingPnl
+
+Returns unsettled funding PnL for a position.
+
+```typescript
+calculateUnsettledFundingPnl(
+  market: PerpMarketAccount,
+  perpPosition: PerpPosition
+): BN
+```
+
+<ParamField path="market" type="PerpMarketAccount" required>
+  The perpetual market account
+</ParamField>
+
+<ParamField path="perpPosition" type="PerpPosition" required>
+  The perpetual position
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Unsettled funding PnL in QUOTE_PRECISION
+</ResponseField>
+
+#### Usage Example
+
+```typescript
+import { calculateUnsettledFundingPnl } from '@drift-labs/sdk';
+
+const market = driftClient.getPerpMarketAccount(0);
+const position = user.getPerpPosition(0);
+
+const fundingPnl = calculateUnsettledFundingPnl(market, position);
+console.log('Unsettled funding:', convertToNumber(fundingPnl, QUOTE_PRECISION));
+```
+
+### calculateFeesAndFundingPnl
+
+Returns total fees and funding PnL for a position.
+
+```typescript
+calculateFeesAndFundingPnl(
+  market: PerpMarketAccount,
+  perpPosition: PerpPosition,
+  includeUnsettled?: boolean
+): BN
+```
+
+<ParamField path="market" type="PerpMarketAccount" required>
+  The perpetual market account
+</ParamField>
+
+<ParamField path="perpPosition" type="PerpPosition" required>
+  The perpetual position
+</ParamField>
+
+<ParamField path="includeUnsettled" type="boolean" default="true">
+  Whether to include unsettled funding
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Total fees and funding PnL in QUOTE_PRECISION
+</ResponseField>
+
+## Price Calculation Functions
+
+### calculateBreakEvenPrice
+
+Calculates the break-even price for a position.
+
+```typescript
+calculateBreakEvenPrice(
+  userPosition: PerpPosition
+): BN
+```
+
+<ParamField path="userPosition" type="PerpPosition" required>
+  The user's position
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Break-even price in PRICE_PRECISION (10^6)
+</ResponseField>
+
+#### Usage Example
+
+```typescript
+import { calculateBreakEvenPrice } from '@drift-labs/sdk';
+
+const position = user.getPerpPosition(0);
+const breakEvenPrice = calculateBreakEvenPrice(position);
+console.log('Break-even price:', convertToNumber(breakEvenPrice, PRICE_PRECISION));
+```
+
+### calculateEntryPrice
+
+Calculates the entry price for a position.
+
+```typescript
+calculateEntryPrice(
+  userPosition: PerpPosition
+): BN
+```
+
+<ParamField path="userPosition" type="PerpPosition" required>
+  The user's position
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Entry price in PRICE_PRECISION (10^6)
+</ResponseField>
+
+### calculateCostBasis
+
+Calculates the cost basis for a position.
+
+```typescript
+calculateCostBasis(
+  userPosition: PerpPosition,
+  includeSettledPnl?: boolean
+): BN
+```
+
+<ParamField path="userPosition" type="PerpPosition" required>
+  The user's position
+</ParamField>
+
+<ParamField path="includeSettledPnl" type="boolean" default="false">
+  Whether to include settled PnL in calculation
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Cost basis in PRICE_PRECISION (10^10)
+</ResponseField>
+
+## Position Status Functions
+
+### positionIsAvailable
+
+Checks if a position slot is available (empty and not being liquidated).
+
+```typescript
+positionIsAvailable(
+  position: PerpPosition
+): boolean
+```
+
+<ParamField path="position" type="PerpPosition" required>
+  The position to check
+</ParamField>
+
+<ResponseField name="return" type="boolean">
+  True if position is available
+</ResponseField>
+
+### positionIsBeingLiquidated
+
+Checks if a position is currently being liquidated.
+
+```typescript
+positionIsBeingLiquidated(
+  position: PerpPosition
+): boolean
+```
+
+<ParamField path="position" type="PerpPosition" required>
+  The position to check
+</ParamField>
+
+<ResponseField name="return" type="boolean">
+  True if position is being liquidated or bankrupt
+</ResponseField>
+
+### isEmptyPosition
+
+Checks if a position is empty (no base amount and no open orders).
+
+```typescript
+isEmptyPosition(
+  userPosition: PerpPosition
+): boolean
+```
+
+<ParamField path="userPosition" type="PerpPosition" required>
+  The position to check
+</ParamField>
+
+<ResponseField name="return" type="boolean">
+  True if position is empty
+</ResponseField>
+
+### hasOpenOrders
+
+Checks if a position has open orders.
+
+```typescript
+hasOpenOrders(
+  position: PerpPosition
+): boolean
+```
+
+<ParamField path="position" type="PerpPosition" required>
+  The position to check
+</ParamField>
+
+<ResponseField name="return" type="boolean">
+  True if position has open orders, bids, or asks
+</ResponseField>
+
+## Direction Helper Functions
+
+### findDirectionToClose
+
+Determines the direction needed to close a position.
+
+```typescript
+findDirectionToClose(
+  userPosition: PerpPosition
+): PositionDirection
+```
+
+<ParamField path="userPosition" type="PerpPosition" required>
+  The position to check
+</ParamField>
+
+<ResponseField name="return" type="PositionDirection">
+  SHORT if position is long, LONG if position is short
+</ResponseField>
+
+### positionCurrentDirection
+
+Returns the current direction of a position.
+
+```typescript
+positionCurrentDirection(
+  userPosition: PerpPosition
+): PositionDirection
+```
+
+<ParamField path="userPosition" type="PerpPosition" required>
+  The position to check
+</ParamField>
+
+<ResponseField name="return" type="PositionDirection">
+  LONG if baseAssetAmount >= 0, SHORT otherwise
+</ResponseField>
+
+#### Usage Example
+
+```typescript
+import {
+  findDirectionToClose,
+  positionCurrentDirection,
+  PositionDirection
+} from '@drift-labs/sdk';
+
+const position = user.getPerpPosition(0);
+const currentDir = positionCurrentDirection(position);
+const closeDir = findDirectionToClose(position);
+
+console.log('Current direction:', currentDir === PositionDirection.LONG ? 'LONG' : 'SHORT');
+console.log('Direction to close:', closeDir === PositionDirection.LONG ? 'LONG' : 'SHORT');
+```

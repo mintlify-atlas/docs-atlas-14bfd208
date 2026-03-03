@@ -1,0 +1,196 @@
+---
+title: Perpetual Markets
+description: Access perpetual market accounts and data in Drift Protocol v2
+---
+
+Perpetual markets allow users to trade with leverage without an expiry date. Each perp market has its own account containing market configuration, AMM state, and funding rate data.
+
+## Get Perp Market Account
+
+Retrieve a perpetual market account by its market index:
+
+```typescript
+const marketIndex = 0; // SOL-PERP
+const perpMarket = driftClient.getPerpMarketAccount(marketIndex);
+```
+
+### Force Fetch from RPC
+
+Force a fetch from RPC before returning the account (useful for testing):
+
+```typescript
+const perpMarket = await driftClient.forceGetPerpMarketAccount(marketIndex);
+```
+
+## Get All Perp Markets
+
+Retrieve all perpetual market accounts:
+
+```typescript
+const allPerpMarkets = driftClient.getPerpMarketAccounts();
+```
+
+## PerpMarketAccount Structure
+
+The `PerpMarketAccount` type contains all data for a perpetual market.
+
+<ResponseField name="marketIndex" type="number" required>
+  The unique identifier for this perp market
+</ResponseField>
+
+<ResponseField name="pubkey" type="PublicKey" required>
+  The on-chain address of this market account
+</ResponseField>
+
+<ResponseField name="status" type="MarketStatus" required>
+  Current status of the market (e.g., active, paused, settlement, delisted)
+</ResponseField>
+
+<ResponseField name="contractType" type="ContractType" required>
+  Type of contract: perpetual, future, or prediction
+</ResponseField>
+
+<ResponseField name="contractTier" type="ContractTier" required>
+  Risk tier classification: A, B, C, speculative, highly speculative, or isolated
+</ResponseField>
+
+<ResponseField name="name" type="number[]" required>
+  Market name as byte array (use `decodeName()` to convert to string)
+</ResponseField>
+
+<ResponseField name="amm" type="AMM" required>
+  Automated Market Maker state containing reserves, oracle info, and funding data
+  <Expandable title="AMM fields">
+    <ResponseField name="baseAssetReserve" type="BN">
+      Base asset reserve in AMM
+    </ResponseField>
+    <ResponseField name="quoteAssetReserve" type="BN">
+      Quote asset reserve in AMM
+    </ResponseField>
+    <ResponseField name="sqrtK" type="BN">
+      Square root of k (constant product invariant)
+    </ResponseField>
+    <ResponseField name="oracle" type="PublicKey">
+      Oracle account providing price data
+    </ResponseField>
+    <ResponseField name="oracleSource" type="OracleSource">
+      Oracle source type (Pyth, Switchboard, etc.)
+    </ResponseField>
+    <ResponseField name="cumulativeFundingRateLong" type="BN">
+      Cumulative funding rate for long positions
+    </ResponseField>
+    <ResponseField name="cumulativeFundingRateShort" type="BN">
+      Cumulative funding rate for short positions
+    </ResponseField>
+    <ResponseField name="lastFundingRate" type="BN">
+      Most recent funding rate
+    </ResponseField>
+    <ResponseField name="lastFundingRateTs" type="BN">
+      Timestamp of last funding rate update
+    </ResponseField>
+    <ResponseField name="baseAssetAmountWithAmm" type="BN">
+      Net base asset amount with AMM
+    </ResponseField>
+    <ResponseField name="baseAssetAmountLong" type="BN">
+      Total long base asset amount
+    </ResponseField>
+    <ResponseField name="baseAssetAmountShort" type="BN">
+      Total short base asset amount
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="marginRatioInitial" type="number" required>
+  Initial margin ratio required to open positions (in margin precision 10000)
+</ResponseField>
+
+<ResponseField name="marginRatioMaintenance" type="number" required>
+  Maintenance margin ratio to avoid liquidation (in margin precision 10000)
+</ResponseField>
+
+<ResponseField name="imfFactor" type="number" required>
+  Initial margin fraction factor for size-based margin increases
+</ResponseField>
+
+<ResponseField name="unrealizedPnlImfFactor" type="number" required>
+  IMF factor applied to unrealized PnL for margin calculations
+</ResponseField>
+
+<ResponseField name="unrealizedPnlInitialAssetWeight" type="number" required>
+  Asset weight applied to positive unrealized PnL for initial margin
+</ResponseField>
+
+<ResponseField name="unrealizedPnlMaintenanceAssetWeight" type="number" required>
+  Asset weight applied to positive unrealized PnL for maintenance margin
+</ResponseField>
+
+<ResponseField name="numberOfUsersWithBase" type="number" required>
+  Count of users with open positions in this market
+</ResponseField>
+
+<ResponseField name="numberOfUsers" type="number" required>
+  Total count of users interacting with this market
+</ResponseField>
+
+<ResponseField name="pnlPool" type="PoolBalance" required>
+  PnL pool used to settle positive user PnL
+</ResponseField>
+
+<ResponseField name="liquidatorFee" type="number" required>
+  Fee paid to liquidators (in percentage precision)
+</ResponseField>
+
+<ResponseField name="ifLiquidationFee" type="number" required>
+  Fee paid to insurance fund during liquidations
+</ResponseField>
+
+<ResponseField name="expiryTs" type="BN" required>
+  Expiry timestamp for future contracts (0 for perpetuals)
+</ResponseField>
+
+<ResponseField name="expiryPrice" type="BN" required>
+  Settlement price for expired futures
+</ResponseField>
+
+## Calculate Market Prices
+
+Calculate bid and ask prices for a perp market:
+
+```typescript
+import { calculateBidPrice, calculateAskPrice } from '@drift-labs/sdk';
+
+const oraclePriceData = driftClient.getOraclePriceDataAndSlot(
+  perpMarket.amm.oracle,
+  perpMarket.amm.oracleSource
+);
+
+const bidPrice = calculateBidPrice(perpMarket, oraclePriceData.data);
+const askPrice = calculateAskPrice(perpMarket, oraclePriceData.data);
+
+console.log('Bid:', bidPrice.toString());
+console.log('Ask:', askPrice.toString());
+```
+
+## Calculate Market Margin
+
+Calculate margin requirements for a given position size:
+
+```typescript
+import { calculateMarketMarginRatio, BASE_PRECISION } from '@drift-labs/sdk';
+
+const size = BASE_PRECISION; // 1 base unit
+const marginCategory = 'Initial'; // or 'Maintenance'
+
+const marginRatio = calculateMarketMarginRatio(
+  perpMarket,
+  size,
+  marginCategory
+);
+
+console.log('Margin ratio:', marginRatio);
+```
+
+## Related Types
+
+- [Oracle Price Data](/api/markets/oracles)
+- [User Positions](/api/user/positions)

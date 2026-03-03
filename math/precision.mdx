@@ -1,0 +1,299 @@
+---
+title: "Precision & BigNum Handling"
+description: "Understanding precision handling and BigNum arithmetic in Drift Protocol v2"
+---
+
+## Overview
+
+Drift Protocol v2 uses [BN.js](https://github.com/indutny/bn.js/) (BigNum) to represent numerical values with high precision. This is essential because Solana tokens use levels of precision that exceed JavaScript's standard floating-point number capabilities.
+
+<Note>
+All numbers in BN are represented as **integers**. The precision value indicates how to convert them back to decimal numbers.
+</Note>
+
+## How Precision Works
+
+A BigNum value combined with a precision represents a decimal number:
+
+```typescript
+// Example:
+// BigNum: 10,500,000 with precision 10^6 = 10.5
+// Because: 10,500,000 / 10^6 = 10.5
+```
+
+## Standard Precision Constants
+
+Drift uses consistent precision values across the protocol:
+
+| Constant | Value | Exponent | Usage |
+|----------|-------|----------|-------|
+| `QUOTE_PRECISION` | 1,000,000 | 10^6 | Quote asset amounts (USDC) |
+| `PRICE_PRECISION` | 1,000,000 | 10^6 | Asset prices |
+| `PEG_PRECISION` | 1,000,000 | 10^6 | AMM peg multiplier |
+| `BASE_PRECISION` | 1,000,000,000 | 10^9 | Base asset amounts |
+| `AMM_RESERVE_PRECISION` | 1,000,000,000 | 10^9 | AMM reserve values |
+| `FUNDING_RATE_BUFFER_PRECISION` | 1,000 | 10^3 | Funding rate buffer |
+| `FUNDING_RATE_PRECISION` | 1,000,000,000 | 10^9 | Full funding rate precision |
+| `PERCENTAGE_PRECISION` | 1,000,000 | 10^6 | Percentage values |
+| `MARGIN_PRECISION` | 10,000 | 10^4 | Margin ratios |
+| `BID_ASK_SPREAD_PRECISION` | 1,000,000 | 10^6 | Bid-ask spreads |
+
+### Precision Relationships
+
+```typescript
+// From numericConstants.ts
+const AMM_TO_QUOTE_PRECISION_RATIO = 
+  AMM_RESERVE_PRECISION.div(QUOTE_PRECISION); // 10^3
+
+const PRICE_DIV_PEG = 
+  PRICE_PRECISION.div(PEG_PRECISION); // 10^0 = 1
+
+const AMM_TIMES_PEG_TO_QUOTE_PRECISION_RATIO = 
+  AMM_RESERVE_PRECISION.mul(PEG_PRECISION).div(QUOTE_PRECISION); // 10^9
+```
+
+## The BigNum Class
+
+Drift provides a `BigNum` class that wraps BN with precision-aware operations:
+
+### Creating BigNum Values
+
+```typescript
+import { BigNum } from '@drift-labs/sdk';
+import { BN } from '@coral-xyz/anchor';
+
+// Create from BN and precision
+const price = BigNum.from(new BN(10500000), new BN(6)); // 10.5
+
+// Create from printed string
+const amount = BigNum.fromPrint('10.5', new BN(6)); // 10,500,000 with precision 10^6
+```
+
+### Arithmetic Operations
+
+```typescript
+const a = BigNum.from(new BN(10000000), new BN(6)); // 10.0
+const b = BigNum.from(new BN(5000000), new BN(6));  // 5.0
+
+// Addition/Subtraction (requires same precision)
+const sum = a.add(b);  // 15.0
+const diff = a.sub(b); // 5.0
+
+// Multiplication (precisions add)
+const product = a.mul(b); // precision = 10^12
+
+// Scalar multiplication (maintains precision)
+const scaled = a.scalarMul(b); // 50.0, precision = 10^6
+
+// Division
+const quotient = a.div(b); // 2.0
+```
+
+### Shifting Precision
+
+```typescript
+const value = BigNum.from(new BN(1000000), new BN(6)); // 1.0
+
+// Shift up (multiply by 10^3)
+const shifted = value.shift(new BN(3)); // 1000.0, precision 10^9
+
+// Shift to specific precision
+const converted = value.shiftTo(new BN(9)); // Same as shift(3)
+```
+
+### Display & Formatting
+
+```typescript
+const amount = BigNum.from(new BN(1234567890), new BN(6)); // 1234.56789
+
+// Print full precision
+amount.print();           // "1234.56789"
+
+// Print without trailing zeros
+amount.printShort();      // "1234.56789"
+
+// Fixed decimal places
+amount.toFixed(2);        // "1234.56"
+
+// Significant figures
+amount.toPrecision(4);    // "1234"
+
+// Pretty print with thousand separators
+amount.prettyPrint();     // "1,234.56789"
+
+// Format as dollar amount
+amount.toNotional();      // "$1,234.56"
+
+// Millified (K, M, B, T)
+amount.toMillified(3);    // "1.23K"
+```
+
+## Division Precision Handling
+
+<Warning>
+BN division returns the **floor** value by default. For exact division, you must handle the modulus.
+</Warning>
+
+```typescript
+import { BN } from '@coral-xyz/anchor';
+import { convertToNumber } from '@drift-labs/sdk';
+
+// INCORRECT - Gets floor value only
+const bad = new BN(10500).div(new BN(1000)).toNumber(); 
+// Result: 10
+
+// CORRECT - Manual handling
+const good = new BN(10500).div(new BN(1000)).toNumber() + 
+             new BN(10500).mod(new BN(1000)).toNumber() / 1000;
+// Result: 10.5
+
+// BEST - Use helper function
+const best = convertToNumber(new BN(10500), new BN(1000));
+// Result: 10.5
+```
+
+## convertToNumber Helper
+
+The SDK provides a `convertToNumber` function for safe BN to number conversion:
+
+```typescript
+import { convertToNumber, PRICE_PRECISION, QUOTE_PRECISION } from '@drift-labs/sdk';
+
+// Convert price from BN to number
+const priceBN = new BN(10500000); // 10.5 with PRICE_PRECISION
+const priceNum = convertToNumber(priceBN, PRICE_PRECISION);
+// Result: 10.5
+
+// Convert quote amount
+const quoteBN = new BN(1000000000); // 1000 with QUOTE_PRECISION  
+const quoteNum = convertToNumber(quoteBN, QUOTE_PRECISION);
+// Result: 1000.0
+```
+
+### Implementation
+
+```typescript
+export const convertToNumber = (
+  bigNumber: BN,
+  precision: BN = PRICE_PRECISION
+) => {
+  if (!bigNumber) return 0;
+  return (
+    bigNumber.div(precision).toNumber() +
+    bigNumber.mod(precision).toNumber() / precision.toNumber()
+  );
+};
+```
+
+## convertToBN Helper
+
+Convert JavaScript numbers to BN with proper precision:
+
+```typescript
+import { convertToBN, QUOTE_PRECISION } from '@drift-labs/sdk';
+
+const amount = 10.5;
+const amountBN = convertToBN(amount, QUOTE_PRECISION);
+// Result: BN(10500000)
+```
+
+### Implementation
+
+```typescript
+export function convertToBN(value: number, precision: BN): BN {
+  const wholePart = Math.floor(value);
+  const decimalPart = Math.round((value - wholePart) * precision.toNumber());
+  return new BN(wholePart).mul(precision).add(new BN(decimalPart));
+}
+```
+
+## Common Patterns
+
+### Working with Prices
+
+```typescript
+import { PRICE_PRECISION, convertToNumber } from '@drift-labs/sdk';
+
+// Oracle price is in PRICE_PRECISION
+const oraclePrice = driftClient.getOracleDataForPerpMarket(0).price;
+const priceDecimal = convertToNumber(oraclePrice, PRICE_PRECISION);
+console.log(`SOL-PERP price: $${priceDecimal}`);
+```
+
+### Working with Position Sizes
+
+```typescript
+import { BASE_PRECISION, QUOTE_PRECISION } from '@drift-labs/sdk';
+
+// Position size in BASE_PRECISION (10^9)
+const baseSize = new BN(1).mul(BASE_PRECISION); // 1 SOL
+
+// Convert to decimal
+const sizeDecimal = convertToNumber(baseSize, BASE_PRECISION);
+// Result: 1.0
+```
+
+### Calculating Notional Value
+
+```typescript
+import { 
+  BASE_PRECISION, 
+  PRICE_PRECISION, 
+  QUOTE_PRECISION,
+  convertToNumber 
+} from '@drift-labs/sdk';
+
+const baseAmount = new BN(5).mul(BASE_PRECISION); // 5 SOL
+const price = new BN(100).mul(PRICE_PRECISION);   // $100
+
+// notional = baseAmount * price / BASE_PRECISION
+const notionalBN = baseAmount.mul(price).div(BASE_PRECISION);
+const notionalUSD = convertToNumber(notionalBN, PRICE_PRECISION);
+// Result: $500
+```
+
+## Best Practices
+
+<Note>
+1. **Always use BN for calculations** - Never convert to numbers until the final display step
+2. **Match precisions** - Ensure values have the same precision before adding/subtracting
+3. **Use helper functions** - Prefer `convertToNumber()` over manual division
+4. **Be careful with multiplication** - Precision accumulates, so adjust accordingly
+5. **Handle division carefully** - Remember BN division truncates by default
+</Note>
+
+## Examples from SDK
+
+### Trading Example
+
+```typescript
+import { 
+  DriftClient, 
+  BASE_PRECISION, 
+  PRICE_PRECISION,
+  convertToNumber,
+  calculateBidAskPrice 
+} from '@drift-labs/sdk';
+
+// Get market data
+const marketIndex = 0; // SOL-PERP
+const market = driftClient.getPerpMarketAccount(marketIndex);
+const oracleData = driftClient.getOracleDataForPerpMarket(marketIndex);
+
+// Get bid/ask prices (returns BN with PRICE_PRECISION)
+const [bid, ask] = calculateBidAskPrice(market.amm, oracleData);
+
+const bidPrice = convertToNumber(bid, PRICE_PRECISION);
+const askPrice = convertToNumber(ask, PRICE_PRECISION);
+
+console.log(`Bid: $${bidPrice}, Ask: $${askPrice}`);
+
+// Place order for 1 SOL
+const orderSize = new BN(1).mul(BASE_PRECISION);
+```
+
+## Related
+
+- [AMM Calculations](/math/amm)
+- [PnL Calculations](/math/pnl)
+- [Margin Calculations](/math/margin-calculations)

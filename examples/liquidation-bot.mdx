@@ -1,0 +1,237 @@
+---
+title: Liquidation Bot
+description: Build a liquidation bot to earn liquidation fees
+---
+
+Liquidation bots monitor accounts and liquidate undercollateralized positions to earn fees.
+
+## Overview
+
+Liquidation bots:
+1. Monitor all user accounts
+2. Identify accounts below maintenance margin
+3. Execute liquidations to earn fees
+4. Help maintain protocol solvency
+
+## Basic Liquidation Bot
+
+```typescript liquidation-bot.ts
+import {
+  DriftClient,
+  BulkAccountLoader,
+  User,
+  MarketType,
+  convertToNumber,
+  QUOTE_PRECISION,
+  BN,
+} from '@drift-labs/sdk';
+import { PublicKey } from '@solana/web3.js';
+
+class LiquidationBot {
+  private driftClient: DriftClient;
+  private userMap: Map<string, User> = new Map();
+
+  constructor(driftClient: DriftClient) {
+    this.driftClient = driftClient;
+  }
+
+  async run() {
+    console.log('Liquidation bot starting...');
+
+    // Load all user accounts
+    await this.loadUserAccounts();
+
+    // Check for liquidations every 10 seconds
+    setInterval(async () => {
+      await this.checkLiquidations();
+    }, 10000);
+  }
+
+  async loadUserAccounts() {
+    console.log('Loading user accounts...');
+
+    // Get all user account public keys
+    const userAccounts = await this.driftClient.program.account.user.all();
+
+    console.log(`Found ${userAccounts.length} user accounts`);
+
+    // Create User instances for monitoring
+    for (const account of userAccounts.slice(0, 100)) { // Limit for example
+      const user = new User({
+        driftClient: this.driftClient,
+        userAccountPublicKey: account.publicKey,
+        accountSubscription: {
+          type: 'polling',
+          accountLoader: this.driftClient.accountSubscriber.accountLoader,
+        },
+      });
+
+      await user.subscribe();
+      this.userMap.set(account.publicKey.toBase58(), user);
+    }
+
+    console.log(`Monitoring ${this.userMap.size} accounts`);
+  }
+
+  async checkLiquidations() {
+    console.log('\nChecking for liquidations...');
+
+    for (const [pubkey, user] of this.userMap) {
+      try {
+        await user.fetchAccounts();
+
+        // Check if account can be liquidated
+        const canBeLiquidated = user.canBeLiquidated();
+
+        if (canBeLiquidated) {
+          console.log(`\n🚨 Found liquidatable account: ${pubkey}`);
+
+          // Get account details
+          const totalCollateral = user.getTotalCollateral();
+          const marginRequirement = user.getMaintenanceMarginRequirement();
+          const health = user.getHealth();
+
+          console.log('  Collateral:', convertToNumber(totalCollateral, QUOTE_PRECISION));
+          console.log('  Margin req:', convertToNumber(marginRequirement, QUOTE_PRECISION));
+          console.log('  Health:', health.toString());
+
+          // Attempt liquidation
+          await this.liquidateUser(user);
+        }
+      } catch (error) {
+        console.error(`Error checking ${pubkey}:`, error.message);
+      }
+    }
+  }
+
+  async liquidateUser(user: User) {
+    const userAccount = user.getUserAccount();
+
+    // Liquidate perp positions
+    const perpPositions = user.getActivePerpPositions();
+    
+    for (const position of perpPositions) {
+      try {
+        console.log(`  Liquidating perp position ${position.marketIndex}...`);
+
+        const txSig = await this.driftClient.liquidatePerp(
+          userAccount.authority,
+          userAccount,
+          position.marketIndex,
+          position.baseAssetAmount.abs() // Max amount
+        );
+
+        console.log(`  Liquidated perp: ${txSig}`);
+      } catch (error) {
+        console.error(`  Failed to liquidate perp:`, error.message);
+      }
+    }
+
+    // Liquidate spot positions
+    const spotPositions = user.getActiveSpotPositions();
+    
+    for (const position of spotPositions) {
+      if (position.balanceType === SpotBalanceType.BORROW) {
+        try {
+          console.log(`  Liquidating spot borrow ${position.marketIndex}...`);
+
+          const txSig = await this.driftClient.liquidateBorrowForPerpPnl(
+            userAccount.authority,
+            userAccount,
+            position.marketIndex,
+            0, // USDC market
+            user.getTokenAmount(position.marketIndex).abs()
+          );
+
+          console.log(`  Liquidated spot: ${txSig}`);
+        } catch (error) {
+          console.error(`  Failed to liquidate spot:`, error.message);
+        }
+      }
+    }
+  }
+}
+
+// Run the bot
+async function main() {
+  const driftClient = await initializeDriftClient();
+  
+  const bot = new LiquidationBot(driftClient);
+  await bot.run();
+}
+
+main().catch(console.error);
+```
+
+## Key Concepts
+
+<Accordion title="Liquidation conditions">
+  Accounts are liquidatable when:
+  - Total collateral < Maintenance margin requirement
+  - Account health < 0
+</Accordion>
+
+<Accordion title="Liquidation fees">
+  Liquidators earn a percentage of the liquidated position as a fee.
+</Accordion>
+
+<Accordion title="Partial liquidations">
+  The protocol uses partial liquidations to minimize impact.
+</Accordion>
+
+<Accordion title="Insurance fund">
+  When liquidations result in bad debt, the insurance fund covers losses.
+</Accordion>
+
+## Production Considerations
+
+### Efficient Account Monitoring
+
+```typescript
+// Use WebSocket or gRPC for real-time updates
+const driftClient = new DriftClient({
+  // ...
+  accountSubscription: {
+    type: 'websocket',
+  },
+});
+
+// Listen for account updates
+driftClient.eventEmitter.on('userAccountUpdate', async (account) => {
+  // Check if liquidatable
+});
+```
+
+### Priority Fees
+
+Liquidations are competitive. Use priority fees to win:
+
+```typescript
+import { ComputeBudgetProgram } from '@solana/web3.js';
+
+// Add priority fee
+const priorityFee = ComputeBudgetProgram.setComputeUnitPrice({
+  microLamports: 100_000,
+});
+```
+
+### Risk Management
+
+- **Collateral**: Maintain sufficient collateral for liquidations
+- **Gas costs**: Monitor profitability vs gas costs
+- **Competition**: Be prepared for failed transactions
+
+<Warning>
+  Running liquidation bots requires capital and technical expertise. Test thoroughly on devnet first.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Keeper Bots Repo" href="https://github.com/drift-labs/keeper-bots-v2">
+    Production keeper implementations
+  </Card>
+  <Card title="Liquidation Concepts" href="/concepts/liquidations">
+    Understanding liquidations
+  </Card>
+</CardGroup>

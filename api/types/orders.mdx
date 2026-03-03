@@ -1,0 +1,406 @@
+---
+title: Order Types
+description: Order-related type definitions for Drift Protocol v2
+---
+
+Order types define the structure and parameters for placing and managing orders.
+
+## Order
+
+Represents an active order on the Drift Protocol.
+
+<ResponseField name="status" type="OrderStatus" required>
+  Current order status (INIT, OPEN, FILLED, CANCELED)
+</ResponseField>
+
+<ResponseField name="orderType" type="OrderType" required>
+  Type of order (LIMIT, MARKET, TRIGGER_MARKET, TRIGGER_LIMIT, ORACLE)
+</ResponseField>
+
+<ResponseField name="marketType" type="MarketType" required>
+  Market type (PERP or SPOT)
+</ResponseField>
+
+<ResponseField name="slot" type="BN" required>
+  Solana slot when order was placed
+</ResponseField>
+
+<ResponseField name="orderId" type="number" required>
+  Unique order identifier assigned by the protocol
+</ResponseField>
+
+<ResponseField name="userOrderId" type="number" required>
+  User-defined order identifier
+</ResponseField>
+
+<ResponseField name="marketIndex" type="number" required>
+  Index of the market for this order
+</ResponseField>
+
+<ResponseField name="price" type="BN" required>
+  Limit price in PRICE_PRECISION (1e6)
+</ResponseField>
+
+<ResponseField name="baseAssetAmount" type="BN" required>
+  Amount of base asset to trade
+</ResponseField>
+
+<ResponseField name="quoteAssetAmount" type="BN" required>
+  Amount of quote asset for the order
+</ResponseField>
+
+<ResponseField name="baseAssetAmountFilled" type="BN" required>
+  Amount of base asset already filled
+</ResponseField>
+
+<ResponseField name="quoteAssetAmountFilled" type="BN" required>
+  Amount of quote asset already filled
+</ResponseField>
+
+<ResponseField name="direction" type="PositionDirection" required>
+  Order direction (LONG or SHORT)
+</ResponseField>
+
+<ResponseField name="reduceOnly" type="boolean" required>
+  Whether this order can only reduce position size
+</ResponseField>
+
+<ResponseField name="triggerPrice" type="BN" required>
+  Price at which trigger order activates
+</ResponseField>
+
+<ResponseField name="triggerCondition" type="OrderTriggerCondition" required>
+  Condition for trigger activation (ABOVE, BELOW, etc.)
+</ResponseField>
+
+<ResponseField name="postOnly" type="boolean" required>
+  Whether order must be maker-only
+</ResponseField>
+
+<ResponseField name="immediateOrCancel" type="boolean" required>
+  Whether order should be cancelled if not immediately filled
+</ResponseField>
+
+<ResponseField name="oraclePriceOffset" type="number" required>
+  Offset from oracle price for oracle orders
+</ResponseField>
+
+<ResponseField name="auctionDuration" type="number" required>
+  Duration of order auction in slots
+</ResponseField>
+
+<ResponseField name="maxTs" type="BN" required>
+  Maximum timestamp for order validity
+</ResponseField>
+
+```typescript
+export type Order = {
+  status: OrderStatus;
+  orderType: OrderType;
+  marketType: MarketType;
+  slot: BN;
+  orderId: number;
+  userOrderId: number;
+  marketIndex: number;
+  price: BN;
+  baseAssetAmount: BN;
+  quoteAssetAmount: BN;
+  baseAssetAmountFilled: BN;
+  quoteAssetAmountFilled: BN;
+  direction: PositionDirection;
+  reduceOnly: boolean;
+  triggerPrice: BN;
+  triggerCondition: OrderTriggerCondition;
+  existingPositionDirection: PositionDirection;
+  postOnly: boolean;
+  immediateOrCancel: boolean;
+  oraclePriceOffset: number;
+  auctionDuration: number;
+  auctionStartPrice: BN;
+  auctionEndPrice: BN;
+  maxTs: BN;
+  bitFlags: number;
+  postedSlotTail: number;
+};
+```
+
+## OrderParams
+
+Parameters for placing a new order.
+
+<ResponseField name="orderType" type="OrderType" required>
+  Type of order to place
+</ResponseField>
+
+<ResponseField name="marketType" type="MarketType" required>
+  Market type (PERP or SPOT)
+</ResponseField>
+
+<ResponseField name="direction" type="PositionDirection" required>
+  Order direction (LONG or SHORT)
+</ResponseField>
+
+<ResponseField name="baseAssetAmount" type="BN" required>
+  Amount of base asset to trade
+</ResponseField>
+
+<ResponseField name="price" type="BN" required>
+  Limit price in PRICE_PRECISION
+</ResponseField>
+
+<ResponseField name="marketIndex" type="number" required>
+  Index of the market
+</ResponseField>
+
+<ResponseField name="reduceOnly" type="boolean" required>
+  Whether order can only reduce position
+</ResponseField>
+
+<ResponseField name="postOnly" type="PostOnlyParams" required>
+  Post-only behavior (NONE, MUST_POST_ONLY, TRY_POST_ONLY, SLIDE)
+</ResponseField>
+
+<ResponseField name="userOrderId" type="number" required>
+  User-defined order identifier
+</ResponseField>
+
+<ResponseField name="triggerPrice" type="BN | null">
+  Trigger price for trigger orders
+</ResponseField>
+
+<ResponseField name="triggerCondition" type="OrderTriggerCondition" required>
+  Trigger condition (ABOVE or BELOW)
+</ResponseField>
+
+<ResponseField name="oraclePriceOffset" type="number | null">
+  Offset from oracle price for oracle orders
+</ResponseField>
+
+<ResponseField name="auctionDuration" type="number | null">
+  Auction duration in slots
+</ResponseField>
+
+<ResponseField name="maxTs" type="BN | null">
+  Maximum timestamp for order validity
+</ResponseField>
+
+```typescript
+export type OrderParams = {
+  orderType: OrderType;
+  marketType: MarketType;
+  userOrderId: number;
+  direction: PositionDirection;
+  baseAssetAmount: BN;
+  price: BN;
+  marketIndex: number;
+  reduceOnly: boolean;
+  postOnly: PostOnlyParams;
+  bitFlags: number;
+  triggerPrice: BN | null;
+  triggerCondition: OrderTriggerCondition;
+  oraclePriceOffset: number | null;
+  auctionDuration: number | null;
+  maxTs: BN | null;
+  auctionStartPrice: BN | null;
+  auctionEndPrice: BN | null;
+};
+```
+
+## ScaleOrderParams
+
+Parameters for placing scale orders (multiple orders across a price range).
+
+<ResponseField name="marketType" type="MarketType" required>
+  Market type (PERP or SPOT)
+</ResponseField>
+
+<ResponseField name="direction" type="PositionDirection" required>
+  Order direction for all orders
+</ResponseField>
+
+<ResponseField name="marketIndex" type="number" required>
+  Market index
+</ResponseField>
+
+<ResponseField name="totalBaseAssetAmount" type="BN" required>
+  Total base asset amount to distribute across all orders
+</ResponseField>
+
+<ResponseField name="startPrice" type="BN" required>
+  Starting price for the scale (in PRICE_PRECISION)
+</ResponseField>
+
+<ResponseField name="endPrice" type="BN" required>
+  Ending price for the scale (in PRICE_PRECISION)
+</ResponseField>
+
+<ResponseField name="orderCount" type="number" required>
+  Number of orders to place (min 2, max 32)
+</ResponseField>
+
+<ResponseField name="sizeDistribution" type="SizeDistribution" required>
+  How to distribute sizes (FLAT, ASCENDING, DESCENDING)
+</ResponseField>
+
+<ResponseField name="reduceOnly" type="boolean" required>
+  Whether orders should be reduce-only
+</ResponseField>
+
+<ResponseField name="postOnly" type="PostOnlyParams" required>
+  Post-only setting for all orders
+</ResponseField>
+
+```typescript
+export type ScaleOrderParams = {
+  marketType: MarketType;
+  direction: PositionDirection;
+  marketIndex: number;
+  totalBaseAssetAmount: BN;
+  startPrice: BN;
+  endPrice: BN;
+  orderCount: number;
+  sizeDistribution: SizeDistribution;
+  reduceOnly: boolean;
+  postOnly: PostOnlyParams;
+  bitFlags: number;
+  maxTs: BN | null;
+};
+```
+
+## ModifyOrderParams
+
+Parameters for modifying an existing order.
+
+<ResponseField name="policy" type="ModifyOrderPolicy">
+  Modification policy (MUST_MODIFY, EXCLUDE_PREVIOUS_FILL)
+</ResponseField>
+
+All fields from `OrderParams` can be provided as optional overrides.
+
+```typescript
+export type ModifyOrderParams = {
+  [Property in keyof OrderParams]?: OrderParams[Property] | null;
+} & { policy?: ModifyOrderPolicy };
+
+export enum ModifyOrderPolicy {
+  MustModify = 1,
+  ExcludePreviousFill = 2,
+}
+```
+
+## OrderRecord
+
+Event record for order placements.
+
+<ResponseField name="ts" type="BN" required>
+  Timestamp of the order event
+</ResponseField>
+
+<ResponseField name="user" type="PublicKey" required>
+  User account public key
+</ResponseField>
+
+<ResponseField name="order" type="Order" required>
+  The order details
+</ResponseField>
+
+```typescript
+export type OrderRecord = {
+  ts: BN;
+  user: PublicKey;
+  order: Order;
+};
+```
+
+## OrderActionRecord
+
+Event record for order actions (fills, cancellations, etc.).
+
+<ResponseField name="ts" type="BN" required>
+  Timestamp of the action
+</ResponseField>
+
+<ResponseField name="action" type="OrderAction" required>
+  Type of action (PLACE, CANCEL, EXPIRE, FILL, TRIGGER)
+</ResponseField>
+
+<ResponseField name="actionExplanation" type="OrderActionExplanation" required>
+  Detailed explanation of the action
+</ResponseField>
+
+<ResponseField name="marketIndex" type="number" required>
+  Market index
+</ResponseField>
+
+<ResponseField name="marketType" type="MarketType" required>
+  Market type
+</ResponseField>
+
+<ResponseField name="filler" type="PublicKey | null">
+  Account that filled the order (for fills)
+</ResponseField>
+
+<ResponseField name="baseAssetAmountFilled" type="BN | null">
+  Amount filled
+</ResponseField>
+
+<ResponseField name="takerFee" type="BN | null">
+  Taker fee paid
+</ResponseField>
+
+<ResponseField name="makerFee" type="BN | null">
+  Maker fee paid/rebate received
+</ResponseField>
+
+```typescript
+export type OrderActionRecord = {
+  ts: BN;
+  action: OrderAction;
+  actionExplanation: OrderActionExplanation;
+  marketIndex: number;
+  marketType: MarketType;
+  filler: PublicKey | null;
+  fillerReward: BN | null;
+  fillRecordId: BN | null;
+  baseAssetAmountFilled: BN | null;
+  quoteAssetAmountFilled: BN | null;
+  takerFee: BN | null;
+  makerFee: BN | null;
+  referrerReward: number | null;
+  quoteAssetAmountSurplus: BN | null;
+  taker: PublicKey | null;
+  takerOrderId: number | null;
+  takerOrderDirection: PositionDirection | null;
+  maker: PublicKey | null;
+  makerOrderId: number | null;
+  makerOrderDirection: PositionDirection | null;
+  oraclePrice: BN;
+  // ... additional fields
+};
+```
+
+## Default Order Parameters
+
+Default values for order parameters:
+
+```typescript
+export const DefaultOrderParams: OrderParams = {
+  orderType: OrderType.MARKET,
+  marketType: MarketType.PERP,
+  userOrderId: 0,
+  direction: PositionDirection.LONG,
+  baseAssetAmount: ZERO,
+  price: ZERO,
+  marketIndex: 0,
+  reduceOnly: false,
+  postOnly: PostOnlyParams.NONE,
+  bitFlags: 0,
+  triggerPrice: null,
+  triggerCondition: OrderTriggerCondition.ABOVE,
+  oraclePriceOffset: null,
+  auctionDuration: null,
+  maxTs: null,
+  auctionStartPrice: null,
+  auctionEndPrice: null,
+};
+```

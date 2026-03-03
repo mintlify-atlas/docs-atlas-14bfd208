@@ -1,0 +1,127 @@
+---
+title: Place Limit Order
+description: Place a limit order on Drift
+---
+
+Limit orders execute only at your specified price or better.
+
+## Complete Example
+
+```typescript limit-order.ts
+import {
+  DriftClient,
+  getLimitOrderParams,
+  PositionDirection,
+  PostOnlyParams,
+  BASE_PRECISION,
+  PRICE_PRECISION,
+  BN,
+} from '@drift-labs/sdk';
+
+async function placeLimitOrder(driftClient: DriftClient) {
+  const marketIndex = 0; // SOL-PERP
+
+  // Buy 1 SOL-PERP at $145
+  const limitPrice = new BN(145).mul(PRICE_PRECISION);
+  const baseAssetAmount = new BN(1).mul(BASE_PRECISION);
+
+  const orderParams = getLimitOrderParams({
+    marketIndex,
+    direction: PositionDirection.LONG,
+    baseAssetAmount,
+    price: limitPrice,
+  });
+
+  console.log('Placing limit order at $145...');
+  const txSig = await driftClient.placePerpOrder(orderParams);
+  console.log('Limit order placed:', txSig);
+
+  // Get order details
+  const user = driftClient.getUser();
+  await user.fetchAccounts();
+  
+  const orders = user.getOpenOrders();
+  const lastOrder = orders[orders.length - 1];
+  
+  if (lastOrder) {
+    console.log('\nOrder details:');
+    console.log('  Order ID:', lastOrder.orderId);
+    console.log('  Price:', convertToNumber(lastOrder.price, PRICE_PRECISION));
+    console.log('  Size:', convertToNumber(lastOrder.baseAssetAmount, BASE_PRECISION));
+    console.log('  Status:', lastOrder.status);
+  }
+}
+
+export { placeLimitOrder };
+```
+
+## Post-Only Limit Order
+
+Ensure your order only provides liquidity (maker):
+
+```typescript
+const orderParams = getLimitOrderParams({
+  marketIndex: 0,
+  direction: PositionDirection.LONG,
+  baseAssetAmount: new BN(1).mul(BASE_PRECISION),
+  price: new BN(145).mul(PRICE_PRECISION),
+  postOnly: PostOnlyParams.MUST_POST_ONLY, // Reject if would take
+});
+
+await driftClient.placePerpOrder(orderParams);
+```
+
+## Reduce-Only Limit Order
+
+Limit order that can only close positions:
+
+```typescript
+const orderParams = getLimitOrderParams({
+  marketIndex: 0,
+  direction: PositionDirection.SHORT, // Close long
+  baseAssetAmount: new BN(1).mul(BASE_PRECISION),
+  price: new BN(160).mul(PRICE_PRECISION),
+  reduceOnly: true, // Only close, never open/increase
+});
+
+await driftClient.placePerpOrder(orderParams);
+```
+
+## IOC (Immediate or Cancel)
+
+```typescript
+const orderParams = getLimitOrderParams({
+  marketIndex: 0,
+  direction: PositionDirection.LONG,
+  baseAssetAmount: new BN(1).mul(BASE_PRECISION),
+  price: new BN(145).mul(PRICE_PRECISION),
+  immediateOrCancel: true, // Cancel unfilled portion
+});
+
+await driftClient.placePerpOrder(orderParams);
+```
+
+## With Expiration
+
+```typescript
+const orderParams = getLimitOrderParams({
+  marketIndex: 0,
+  direction: PositionDirection.LONG,
+  baseAssetAmount: new BN(1).mul(BASE_PRECISION),
+  price: new BN(145).mul(PRICE_PRECISION),
+  maxTs: new BN(Date.now() / 1000 + 3600), // Expire in 1 hour
+});
+
+await driftClient.placePerpOrder(orderParams);
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Modify Order" href="/examples/modify-order">
+    Modify existing orders
+  </Card>
+  <Card title="Cancel Order" href="/examples/cancel-order">
+    Cancel orders
+  </Card>
+</CardGroup>

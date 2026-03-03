@@ -1,0 +1,403 @@
+---
+title: WebSocket Subscribers
+description: Real-time account updates using Solana WebSocket connections
+---
+
+WebSocket subscribers use Solana's native `accountSubscribe` RPC method to receive real-time account updates with minimal latency. They automatically handle reconnection and provide event-driven updates.
+
+## WebSocketUserAccountSubscriber
+
+Subscribe to updates for a specific user account.
+
+### Constructor
+
+```typescript
+new WebSocketUserAccountSubscriber(
+  program: Program,
+  userAccountPublicKey: PublicKey,
+  resubOpts?: ResubOpts,
+  commitment?: Commitment
+)
+```
+
+<ParamField path="program" type="Program" required>
+  Anchor program instance for the Drift protocol
+</ParamField>
+
+<ParamField path="userAccountPublicKey" type="PublicKey" required>
+  Public key of the user account to subscribe to
+</ParamField>
+
+<ParamField path="resubOpts" type="ResubOpts">
+  Options for automatic resubscription on connection loss
+</ParamField>
+
+<ParamField path="commitment" type="Commitment">
+  Solana commitment level (e.g., 'confirmed', 'finalized')
+</ParamField>
+
+### Methods
+
+#### subscribe
+
+Start subscribing to user account updates.
+
+```typescript
+await subscriber.subscribe(userAccount?: UserAccount): Promise<boolean>
+```
+
+<ParamField path="userAccount" type="UserAccount">
+  Optional initial user account data to set before subscribing
+</ParamField>
+
+#### getUserAccountAndSlot
+
+Get the current user account data with slot number.
+
+```typescript
+const { data, slot } = subscriber.getUserAccountAndSlot();
+```
+
+**Returns:** `DataAndSlot<UserAccount>`
+
+**Throws:** `NotSubscribedError` if not subscribed
+
+#### updateData
+
+Manually update the user account data.
+
+```typescript
+subscriber.updateData(userAccount: UserAccount, slot: number): void
+```
+
+### Example Usage
+
+```typescript
+import { WebSocketUserAccountSubscriber } from '@drift-labs/sdk';
+import { Program, AnchorProvider } from '@coral-xyz/anchor';
+import { Connection, PublicKey } from '@solana/web3.js';
+
+// Initialize connection and program
+const connection = new Connection('https://api.mainnet-beta.solana.com');
+const provider = new AnchorProvider(connection, wallet, {});
+const program = new Program(IDL, DRIFT_PROGRAM_ID, provider);
+
+// Create subscriber
+const userPubkey = new PublicKey('...');
+const subscriber = new WebSocketUserAccountSubscriber(
+  program,
+  userPubkey,
+  {
+    resubTimeoutMs: 30_000,
+    logResubMessages: true,
+  },
+  'confirmed'
+);
+
+// Listen for updates
+subscriber.eventEmitter.on('userAccountUpdate', (userAccount) => {
+  console.log('User account updated:', userAccount);
+  console.log('Positions:', userAccount.perpPositions);
+});
+
+subscriber.eventEmitter.on('error', (error) => {
+  console.error('Subscription error:', error);
+});
+
+// Subscribe
+await subscriber.subscribe();
+
+// Get current data
+const { data: userAccount, slot } = subscriber.getUserAccountAndSlot();
+console.log('Current user account at slot', slot, ':', userAccount);
+
+// Cleanup
+await subscriber.unsubscribe();
+```
+
+## WebSocketDriftClientAccountSubscriber
+
+Subscribe to Drift protocol state, markets, and oracle accounts.
+
+### Constructor
+
+```typescript
+new WebSocketDriftClientAccountSubscriber(
+  program: Program,
+  perpMarketIndexes: number[],
+  spotMarketIndexes: number[],
+  oracleInfos: OracleInfo[],
+  shouldFindAllMarketsAndOracles: boolean,
+  delistedMarketSetting: DelistedMarketSetting,
+  resubOpts?: ResubOpts,
+  commitment?: Commitment
+)
+```
+
+<ParamField path="program" type="Program" required>
+  Anchor program instance for the Drift protocol
+</ParamField>
+
+<ParamField path="perpMarketIndexes" type="number[]" required>
+  Array of perpetual market indexes to subscribe to
+</ParamField>
+
+<ParamField path="spotMarketIndexes" type="number[]" required>
+  Array of spot market indexes to subscribe to
+</ParamField>
+
+<ParamField path="oracleInfos" type="OracleInfo[]" required>
+  Array of oracle information to subscribe to
+</ParamField>
+
+<ParamField path="shouldFindAllMarketsAndOracles" type="boolean" required>
+  Whether to automatically discover and subscribe to all markets
+</ParamField>
+
+<ParamField path="delistedMarketSetting" type="DelistedMarketSetting" required>
+  How to handle delisted markets: `Unsubscribe`, `Subscribe`, or `Discard`
+</ParamField>
+
+<ParamField path="resubOpts" type="ResubOpts">
+  Options for automatic resubscription
+</ParamField>
+
+<ParamField path="commitment" type="Commitment">
+  Solana commitment level
+</ParamField>
+
+### Methods
+
+#### subscribe
+
+Start subscribing to all configured accounts.
+
+```typescript
+await subscriber.subscribe(): Promise<boolean>
+```
+
+#### addPerpMarket
+
+Dynamically add a perpetual market subscription.
+
+```typescript
+await subscriber.addPerpMarket(marketIndex: number): Promise<boolean>
+```
+
+#### addSpotMarket
+
+Dynamically add a spot market subscription.
+
+```typescript
+await subscriber.addSpotMarket(marketIndex: number): Promise<boolean>
+```
+
+#### addOracle
+
+Dynamically add an oracle subscription.
+
+```typescript
+await subscriber.addOracle(oracleInfo: OracleInfo): Promise<boolean>
+```
+
+#### getStateAccountAndSlot
+
+Get the Drift protocol state account.
+
+```typescript
+const { data: state, slot } = subscriber.getStateAccountAndSlot();
+```
+
+#### getMarketAccountAndSlot
+
+Get a perpetual market account by index.
+
+```typescript
+const market = subscriber.getMarketAccountAndSlot(marketIndex);
+if (market) {
+  console.log('Market at slot', market.slot, ':', market.data);
+}
+```
+
+#### getSpotMarketAccountAndSlot
+
+Get a spot market account by index.
+
+```typescript
+const spotMarket = subscriber.getSpotMarketAccountAndSlot(marketIndex);
+```
+
+#### getOraclePriceDataAndSlot
+
+Get oracle price data by oracle ID.
+
+```typescript
+const oracle = subscriber.getOraclePriceDataAndSlot(oracleId);
+if (oracle) {
+  console.log('Oracle price:', oracle.data.price);
+}
+```
+
+### Example Usage
+
+```typescript
+import { 
+  WebSocketDriftClientAccountSubscriber,
+  DelistedMarketSetting 
+} from '@drift-labs/sdk';
+
+// Create subscriber for all markets
+const driftSubscriber = new WebSocketDriftClientAccountSubscriber(
+  program,
+  [], // perpMarketIndexes - will be auto-discovered
+  [], // spotMarketIndexes - will be auto-discovered
+  [], // oracleInfos - will be auto-discovered
+  true, // shouldFindAllMarketsAndOracles
+  DelistedMarketSetting.Discard,
+  {
+    resubTimeoutMs: 30_000,
+    logResubMessages: true,
+  },
+  'confirmed'
+);
+
+// Listen for events
+driftSubscriber.eventEmitter.on('stateAccountUpdate', (state) => {
+  console.log('State updated:', state);
+});
+
+driftSubscriber.eventEmitter.on('perpMarketAccountUpdate', (market) => {
+  console.log('Perp market updated:', market.marketIndex);
+});
+
+driftSubscriber.eventEmitter.on('spotMarketAccountUpdate', (market) => {
+  console.log('Spot market updated:', market.marketIndex);
+});
+
+driftSubscriber.eventEmitter.on('oraclePriceUpdate', (pubkey, source, data) => {
+  console.log('Oracle update:', data.price.toString());
+});
+
+// Subscribe to all accounts
+await driftSubscriber.subscribe();
+
+// Get state account
+const { data: state } = driftSubscriber.getStateAccountAndSlot();
+console.log('Exchange paused:', state.exchangePaused);
+
+// Get specific market
+const solPerpMarket = driftSubscriber.getMarketAccountAndSlot(0);
+if (solPerpMarket) {
+  console.log('SOL-PERP funding rate:', solPerpMarket.data.amm.lastFundingRate);
+}
+
+// Add a new market dynamically
+await driftSubscriber.addPerpMarket(5);
+
+// Cleanup
+await driftSubscriber.unsubscribe();
+```
+
+## WebSocketProgramAccountSubscriber
+
+Subscribe to all accounts owned by the Drift program.
+
+### Constructor
+
+```typescript
+new WebSocketProgramAccountSubscriber<T>(
+  accountName: string,
+  program: Program,
+  resubOpts?: ResubOpts,
+  commitment?: Commitment
+)
+```
+
+<ParamField path="accountName" type="string" required>
+  Name of the account type (e.g., 'user', 'market')
+</ParamField>
+
+<ParamField path="program" type="Program" required>
+  Anchor program instance
+</ParamField>
+
+### Example Usage
+
+```typescript
+import { WebSocketProgramAccountSubscriber } from '@drift-labs/sdk';
+
+// Subscribe to all user accounts
+const programSubscriber = new WebSocketProgramAccountSubscriber<UserAccount>(
+  'user',
+  program,
+  { resubTimeoutMs: 30_000 },
+  'confirmed'
+);
+
+// Set callback for account updates
+await programSubscriber.subscribe(
+  (accountId, data, context, buffer) => {
+    console.log('User account', accountId.toString(), 'updated at slot', context.slot);
+    console.log('User authority:', data.authority.toString());
+  }
+);
+
+// Cleanup
+await programSubscriber.unsubscribe();
+```
+
+## Resubscription Options
+
+WebSocket subscribers support automatic resubscription on connection loss:
+
+```typescript
+const resubOpts: ResubOpts = {
+  // Timeout in ms before considering connection lost
+  resubTimeoutMs: 30_000,
+  
+  // Log resubscription events
+  logResubMessages: true,
+  
+  // Use polling instead of resubscribing (fallback mechanism)
+  usePollingInsteadOfResub: false,
+  
+  // Polling interval if using polling fallback
+  pollingIntervalMs: 1_000,
+};
+```
+
+## Best Practices
+
+1. **Always handle errors** - Listen to the `error` event to handle connection issues
+2. **Use appropriate commitment** - Use `confirmed` for speed, `finalized` for safety
+3. **Enable resubscription** - Set `resubTimeoutMs` to handle network issues
+4. **Clean up subscriptions** - Always call `unsubscribe()` when done
+5. **Monitor slot numbers** - Use slot numbers to detect stale data
+
+## Common Issues
+
+### NotSubscribedError
+
+Thrown when accessing data before subscribing:
+
+```typescript
+try {
+  const data = subscriber.getUserAccountAndSlot();
+} catch (error) {
+  if (error.name === 'NotSubscribedError') {
+    console.log('Must subscribe first');
+    await subscriber.subscribe();
+  }
+}
+```
+
+### Connection Loss
+
+Handle reconnection with resubscription options:
+
+```typescript
+subscriber.eventEmitter.on('error', async (error) => {
+  console.error('Connection lost:', error);
+  // Resubscription happens automatically if resubOpts is set
+});
+```

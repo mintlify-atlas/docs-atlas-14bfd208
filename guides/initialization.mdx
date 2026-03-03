@@ -1,0 +1,334 @@
+---
+title: Initialize DriftClient
+description: Set up and initialize the Drift SDK client
+---
+
+The `DriftClient` is the main entry point for interacting with Drift Protocol. It manages connections to the Solana blockchain, handles account subscriptions, and provides methods for trading and account management.
+
+## Prerequisites
+
+Before initializing the DriftClient, ensure you have:
+
+- A Solana RPC connection
+- A wallet/keypair
+- The Drift program ID
+
+## Basic Initialization
+
+<Steps>
+  <Step title="Import Required Dependencies">
+    ```typescript
+    import { Connection, Keypair, PublicKey } from '@solana/web3.js';
+    import { Wallet, AnchorProvider } from '@coral-xyz/anchor';
+    import {
+      DriftClient,
+      initialize,
+      BulkAccountLoader,
+    } from '@drift-labs/sdk';
+    ```
+  </Step>
+
+  <Step title="Set Up Connection and Wallet">
+    ```typescript
+    // Initialize SDK config for your environment
+    const sdkConfig = initialize({ env: 'mainnet-beta' });
+    // or 'devnet' for testing
+
+    // Create connection to Solana RPC
+    const connection = new Connection(
+      process.env.RPC_URL || 'https://api.mainnet-beta.solana.com',
+      'confirmed'
+    );
+
+    // Load wallet from environment or create new one
+    const keypair = Keypair.fromSecretKey(
+      Uint8Array.from(JSON.parse(process.env.PRIVATE_KEY))
+    );
+    const wallet = new Wallet(keypair);
+    ```
+  </Step>
+
+  <Step title="Create Account Loader">
+    ```typescript
+    // BulkAccountLoader batches account fetches for efficiency
+    const bulkAccountLoader = new BulkAccountLoader(
+      connection,
+      'confirmed',
+      1000 // polling frequency in ms
+    );
+    ```
+  </Step>
+
+  <Step title="Initialize DriftClient">
+    ```typescript
+    const driftClient = new DriftClient({
+      connection,
+      wallet,
+      programID: new PublicKey(sdkConfig.DRIFT_PROGRAM_ID),
+      accountSubscription: {
+        type: 'polling',
+        accountLoader: bulkAccountLoader,
+      },
+    });
+
+    // Subscribe to account updates
+    await driftClient.subscribe();
+    ```
+  </Step>
+</Steps>
+
+## Configuration Options
+
+### DriftClientConfig
+
+<ParamField path="connection" type="Connection" required>
+  Solana web3.js Connection instance
+</ParamField>
+
+<ParamField path="wallet" type="IWallet" required>
+  Wallet instance implementing the IWallet interface
+</ParamField>
+
+<ParamField path="programID" type="PublicKey" required>
+  Drift program ID (use `initialize()` helper to get correct ID)
+</ParamField>
+
+<ParamField path="accountSubscription" type="object" required>
+  Account subscription configuration
+  
+  <Expandable title="Subscription Types">
+    **Polling**: Uses BulkAccountLoader
+    ```typescript
+    {
+      type: 'polling',
+      accountLoader: bulkAccountLoader
+    }
+    ```
+
+    **WebSocket**: Real-time updates via WebSocket
+    ```typescript
+    {
+      type: 'websocket'
+    }
+    ```
+
+    **gRPC**: High-performance streaming (requires Yellowstone/Laser)
+    ```typescript
+    {
+      type: 'grpc',
+      grpcConfig: { ... }
+    }
+    ```
+  </Expandable>
+</ParamField>
+
+<ParamField path="env" type="DriftEnv">
+  Environment: 'mainnet-beta' or 'devnet' (default: 'mainnet-beta')
+</ParamField>
+
+<ParamField path="txSender" type="TxSender">
+  Custom transaction sender (default: RetryTxSender)
+</ParamField>
+
+<ParamField path="opts" type="ConfirmOptions">
+  Solana transaction confirmation options
+</ParamField>
+
+## Subscription Types
+
+### Polling Subscription
+
+Best for most use cases. Efficiently batches account fetches.
+
+```typescript
+const bulkAccountLoader = new BulkAccountLoader(
+  connection,
+  'confirmed',
+  1000 // poll every 1 second
+);
+
+const driftClient = new DriftClient({
+  // ... other config
+  accountSubscription: {
+    type: 'polling',
+    accountLoader: bulkAccountLoader,
+  },
+});
+```
+
+### WebSocket Subscription
+
+Real-time updates with lower latency. Higher RPC load.
+
+```typescript
+const driftClient = new DriftClient({
+  // ... other config
+  accountSubscription: {
+    type: 'websocket',
+    resubscriptionOptions: {
+      resubscribe: true,
+      resubTimeoutMs: 30000,
+    },
+  },
+});
+```
+
+### gRPC Subscription
+
+Lowest latency, highest throughput. Requires gRPC infrastructure.
+
+```typescript
+import { GrpcConfigs } from '@drift-labs/sdk';
+
+const grpcConfig: GrpcConfigs = {
+  endpoint: 'https://your-grpc-endpoint.com',
+  token: process.env.GRPC_TOKEN,
+};
+
+const driftClient = new DriftClient({
+  // ... other config
+  accountSubscription: {
+    type: 'grpc',
+    grpcConfig,
+  },
+});
+```
+
+## Environment Configuration
+
+Use the `initialize()` helper to get correct addresses for each environment:
+
+```typescript
+import { initialize } from '@drift-labs/sdk';
+
+// Mainnet
+const mainnetConfig = initialize({ env: 'mainnet-beta' });
+console.log(mainnetConfig.DRIFT_PROGRAM_ID); // dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH
+
+// Devnet
+const devnetConfig = initialize({ env: 'devnet' });
+```
+
+<Info>
+  The `initialize()` function returns configuration including:
+  - `DRIFT_PROGRAM_ID`: Main Drift program address
+  - `USDC_MINT_ADDRESS`: USDC token mint
+  - Market configuration and oracles
+</Info>
+
+## Complete Example
+
+```typescript
+import { Connection, Keypair } from '@solana/web3.js';
+import { Wallet } from '@coral-xyz/anchor';
+import {
+  DriftClient,
+  initialize,
+  BulkAccountLoader,
+} from '@drift-labs/sdk';
+
+async function initializeDrift() {
+  // Get config for environment
+  const sdkConfig = initialize({ env: 'mainnet-beta' });
+
+  // Set up connection
+  const connection = new Connection(
+    process.env.RPC_URL!,
+    'confirmed'
+  );
+
+  // Load wallet
+  const keypair = Keypair.fromSecretKey(
+    Uint8Array.from(JSON.parse(process.env.PRIVATE_KEY!))
+  );
+  const wallet = new Wallet(keypair);
+
+  // Create account loader
+  const bulkAccountLoader = new BulkAccountLoader(
+    connection,
+    'confirmed',
+    1000
+  );
+
+  // Initialize client
+  const driftClient = new DriftClient({
+    connection,
+    wallet,
+    programID: new PublicKey(sdkConfig.DRIFT_PROGRAM_ID),
+    accountSubscription: {
+      type: 'polling',
+      accountLoader: bulkAccountLoader,
+    },
+  });
+
+  // Subscribe to updates
+  await driftClient.subscribe();
+  console.log('DriftClient initialized and subscribed');
+
+  // Get state
+  const state = driftClient.getStateAccount();
+  console.log('Exchange paused:', state.exchangeStatus);
+
+  return driftClient;
+}
+
+// Run
+initializeDrift()
+  .then(client => {
+    console.log('Ready to trade!');
+  })
+  .catch(err => {
+    console.error('Initialization failed:', err);
+  });
+```
+
+## Best Practices
+
+<Accordion title="Choose the right subscription type">
+  - **Polling**: Default choice, good balance of performance and simplicity
+  - **WebSocket**: When you need real-time updates and can handle reconnection logic
+  - **gRPC**: For professional market makers and high-frequency trading
+</Accordion>
+
+<Accordion title="Handle subscription lifecycle">
+  ```typescript
+  // Always subscribe after creating client
+  await driftClient.subscribe();
+
+  // Unsubscribe when done to prevent memory leaks
+  await driftClient.unsubscribe();
+  ```
+</Accordion>
+
+<Accordion title="Error handling">
+  ```typescript
+  try {
+    await driftClient.subscribe();
+  } catch (error) {
+    console.error('Failed to subscribe:', error);
+    // Implement retry logic or fallback
+  }
+
+  // Listen for errors
+  driftClient.eventEmitter.on('error', (err) => {
+    console.error('DriftClient error:', err);
+  });
+  ```
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Create User Account" icon="user" href="/guides/account-management">
+    Set up your trading account
+  </Card>
+  <Card title="Place Orders" icon="cart-shopping" href="/guides/placing-orders">
+    Start trading on Drift
+  </Card>
+  <Card title="Account Subscriptions" icon="signal-stream" href="/guides/account-subscriptions">
+    Learn about subscription mechanisms
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/drift-client">
+    Explore DriftClient methods
+  </Card>
+</CardGroup>

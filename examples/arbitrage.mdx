@@ -1,0 +1,240 @@
+---
+title: Arbitrage Strategies
+description: Implement arbitrage strategies on Drift
+---
+
+Arbitrage opportunities arise from price differences between Drift's AMM, DLOB, and external exchanges.
+
+## Types of Arbitrage
+
+<CardGroup cols={2}>
+  <Card title="AMM vs Oracle" icon="scale-balanced">
+    Trade when AMM price diverges from oracle
+  </Card>
+  <Card title="Cross-Exchange" icon="arrows-rotate">
+    Arbitrage Drift vs other exchanges
+  </Card>
+  <Card title="Funding Rate" icon="percent">
+    Capture funding rate differentials
+  </Card>
+  <Card title="Spot-Perp" icon="split">
+    Arbitrage spot and perp prices
+  </Card>
+</CardGroup>
+
+## AMM vs Oracle Arbitrage
+
+```typescript amm-oracle-arb.ts
+import {
+  DriftClient,
+  calculateBidAskPrice,
+  getMarketOrderParams,
+  PositionDirection,
+  convertToNumber,
+  BASE_PRECISION,
+  PRICE_PRECISION,
+  PERCENTAGE_PRECISION,
+  BN,
+} from '@drift-labs/sdk';
+
+class AmmOracleArbitrage {
+  private driftClient: DriftClient;
+  private marketIndex: number;
+  private minProfitBps: number; // Minimum profit in basis points
+
+  constructor(
+    driftClient: DriftClient,
+    marketIndex: number,
+    minProfitBps: number = 10 // 0.1%
+  ) {
+    this.driftClient = driftClient;
+    this.marketIndex = marketIndex;
+    this.minProfitBps = minProfitBps;
+  }
+
+  async run() {
+    console.log('AMM/Oracle arbitrage bot starting...');
+
+    setInterval(async () => {
+      await this.checkOpportunity();
+    }, 2000);
+  }
+
+  async checkOpportunity() {
+    const perpMarket = this.driftClient.getPerpMarketAccount(this.marketIndex);
+    const oracleData = this.driftClient.getOracleDataForPerpMarket(this.marketIndex);
+    const oraclePrice = oracleData.price;
+
+    // Get AMM bid/ask
+    const [bidPrice, askPrice] = calculateBidAskPrice(
+      perpMarket.amm,
+      oracleData
+    );
+
+    // Calculate divergence
+    const bidDivergence = oraclePrice.sub(bidPrice)
+      .mul(PERCENTAGE_PRECISION)
+      .div(oraclePrice);
+    
+    const askDivergence = askPrice.sub(oraclePrice)
+      .mul(PERCENTAGE_PRECISION)
+      .div(oraclePrice);
+
+    const bidDivergenceBps = convertToNumber(bidDivergence, PERCENTAGE_PRECISION) * 10000;
+    const askDivergenceBps = convertToNumber(askDivergence, PERCENTAGE_PRECISION) * 10000;
+
+    // Check for profitable opportunity
+    if (bidDivergenceBps > this.minProfitBps) {
+      console.log(`\n📈 Opportunity: Buy AMM (${bidDivergenceBps.toFixed(2)} bps)`);
+      await this.executeTrade(PositionDirection.LONG, bidDivergenceBps);
+    } else if (askDivergenceBps > this.minProfitBps) {
+      console.log(`\n📉 Opportunity: Sell AMM (${askDivergenceBps.toFixed(2)} bps)`);
+      await this.executeTrade(PositionDirection.SHORT, askDivergenceBps);
+    }
+  }
+
+  async executeTrade(direction: PositionDirection, expectedProfitBps: number) {
+    try {
+      const orderParams = getMarketOrderParams({
+        marketIndex: this.marketIndex,
+        direction,
+        baseAssetAmount: new BN(1).mul(BASE_PRECISION),
+      });
+
+      const txSig = await this.driftClient.placePerpOrder(orderParams);
+      console.log(`  Trade executed: ${txSig}`);
+      console.log(`  Expected profit: ${expectedProfitBps.toFixed(2)} bps`);
+
+      // In production: hedge on another exchange
+      // await this.hedgeOnSpot(direction);
+    } catch (error) {
+      console.error('  Trade failed:', error.message);
+    }
+  }
+}
+
+// Run the arbitrage bot
+async function main() {
+  const driftClient = await initializeDriftClient();
+
+  const arbBot = new AmmOracleArbitrage(
+    driftClient,
+    0, // SOL-PERP
+    10 // 0.1% minimum profit
+  );
+
+  await arbBot.run();
+}
+
+main().catch(console.error);
+```
+
+## Cross-Exchange Arbitrage
+
+```typescript cross-exchange.ts
+import { DriftClient } from '@drift-labs/sdk';
+
+class CrossExchangeArbitrage {
+  private driftClient: DriftClient;
+  private externalExchange: any; // Your exchange client
+
+  async checkOpportunity() {
+    // Get Drift price
+    const driftPrice = await this.getDriftPrice();
+    
+    // Get external exchange price
+    const externalPrice = await this.externalExchange.getPrice('SOL-PERP');
+
+    // Calculate spread
+    const spread = Math.abs(driftPrice - externalPrice) / externalPrice;
+
+    if (spread > 0.001) { // 0.1% opportunity
+      if (driftPrice < externalPrice) {
+        // Buy Drift, sell external
+        await this.buyDrift();
+        await this.sellExternal();
+      } else {
+        // Sell Drift, buy external
+        await this.sellDrift();
+        await this.buyExternal();
+      }
+    }
+  }
+
+  async getDriftPrice(): Promise<number> {
+    const oracleData = this.driftClient.getOracleDataForPerpMarket(0);
+    return convertToNumber(oracleData.price, PRICE_PRECISION);
+  }
+}
+```
+
+## Funding Rate Arbitrage
+
+```typescript funding-arb.ts
+import { convertToNumber, PERCENTAGE_PRECISION } from '@drift-labs/sdk';
+
+class FundingArbitrage {
+  async checkFundingOpportunity(driftClient: DriftClient) {
+    const perpMarket = driftClient.getPerpMarketAccount(0);
+    const fundingRate = perpMarket.amm.lastFundingRate;
+    
+    const annualizedRate = convertToNumber(
+      fundingRate.mul(new BN(365 * 24)),
+      PERCENTAGE_PRECISION
+    );
+
+    console.log('Funding rate (annualized):', annualizedRate, '%');
+
+    // If funding is very negative, longs pay shorts
+    // If funding is very positive, shorts pay longs
+    if (annualizedRate > 20) {
+      console.log('High positive funding - consider shorting');
+      // Short on Drift, hedge long elsewhere
+    } else if (annualizedRate < -20) {
+      console.log('High negative funding - consider longing');
+      // Long on Drift, hedge short elsewhere
+    }
+  }
+}
+```
+
+## Key Considerations
+
+<Accordion title="Transaction costs">
+  Factor in gas fees, exchange fees, and slippage when calculating profitability.
+</Accordion>
+
+<Accordion title="Execution speed">
+  Arbitrage opportunities are fleeting. Use fast infrastructure and priority fees.
+</Accordion>
+
+<Accordion title="Risk management">
+  Always hedge your positions to avoid directional exposure.
+</Accordion>
+
+<Accordion title="Capital efficiency">
+  Optimize capital allocation across opportunities.
+</Accordion>
+
+## Production Requirements
+
+- **Low latency**: Co-located servers, fast RPC
+- **Capital**: Sufficient liquidity for trades
+- **Hedging**: Accounts on multiple exchanges
+- **Monitoring**: Track PnL and positions
+- **Error handling**: Robust retry and fallback logic
+
+<Warning>
+  Arbitrage trading is competitive and requires significant capital and infrastructure. Test thoroughly before deploying capital.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Market Making" href="/examples/market-making">
+    Market making strategies
+  </Card>
+  <Card title="Advanced Features" href="/guides/advanced-features">
+    Advanced SDK capabilities
+  </Card>
+</CardGroup>

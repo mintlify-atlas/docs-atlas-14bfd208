@@ -1,0 +1,215 @@
+---
+title: Oracle Price Data
+description: Access oracle price data for Drift Protocol markets
+---
+
+Oracles provide external price data to Drift Protocol markets. The protocol supports multiple oracle sources including Pyth, Switchboard, and custom oracle implementations.
+
+## Get Oracle Price Data
+
+Retrieve oracle price data for a market:
+
+```typescript
+import { OracleSource } from '@drift-labs/sdk';
+
+const perpMarket = driftClient.getPerpMarketAccount(0);
+
+const oraclePriceData = driftClient.getOraclePriceDataAndSlot(
+  perpMarket.amm.oracle,
+  perpMarket.amm.oracleSource
+);
+
+console.log('Price:', oraclePriceData.data.price.toString());
+console.log('Slot:', oraclePriceData.slot.toString());
+```
+
+## OraclePriceData Structure
+
+The `OraclePriceData` type contains price and confidence information from an oracle.
+
+<ResponseField name="price" type="BN" required>
+  Current oracle price in PRICE_PRECISION (1e6)
+</ResponseField>
+
+<ResponseField name="slot" type="BN" required>
+  Solana slot when the price was updated
+</ResponseField>
+
+<ResponseField name="confidence" type="BN" required>
+  Price confidence interval in PRICE_PRECISION (1e6)
+</ResponseField>
+
+<ResponseField name="hasSufficientNumberOfDataPoints" type="boolean" required>
+  Whether the oracle has sufficient data points for reliability
+</ResponseField>
+
+<ResponseField name="twap" type="BN">
+  Time-weighted average price (if available)
+</ResponseField>
+
+<ResponseField name="twapConfidence" type="BN">
+  Confidence interval for TWAP (if available)
+</ResponseField>
+
+<ResponseField name="maxPrice" type="BN">
+  Maximum price for pre-launch markets only
+</ResponseField>
+
+<ResponseField name="sequenceId" type="BN">
+  Sequence identifier for the price update
+</ResponseField>
+
+## Oracle Sources
+
+Drift Protocol supports multiple oracle sources:
+
+<ResponseField name="PYTH" type="OracleSource">
+  Standard Pyth oracle with default price scaling
+</ResponseField>
+
+<ResponseField name="PYTH_1K" type="OracleSource">
+  Pyth oracle with 1000x price scaling
+</ResponseField>
+
+<ResponseField name="PYTH_1M" type="OracleSource">
+  Pyth oracle with 1,000,000x price scaling
+</ResponseField>
+
+<ResponseField name="PYTH_PULL" type="OracleSource">
+  Pyth pull-based oracle
+</ResponseField>
+
+<ResponseField name="PYTH_1K_PULL" type="OracleSource">
+  Pyth pull oracle with 1000x scaling
+</ResponseField>
+
+<ResponseField name="PYTH_1M_PULL" type="OracleSource">
+  Pyth pull oracle with 1,000,000x scaling
+</ResponseField>
+
+<ResponseField name="SWITCHBOARD" type="OracleSource">
+  Switchboard v2 oracle
+</ResponseField>
+
+<ResponseField name="SWITCHBOARD_ON_DEMAND" type="OracleSource">
+  Switchboard on-demand oracle
+</ResponseField>
+
+<ResponseField name="QUOTE_ASSET" type="OracleSource">
+  Fixed price oracle for quote asset (USDC = $1)
+</ResponseField>
+
+<ResponseField name="PYTH_STABLE_COIN" type="OracleSource">
+  Pyth stablecoin oracle
+</ResponseField>
+
+<ResponseField name="PYTH_STABLE_COIN_PULL" type="OracleSource">
+  Pyth pull stablecoin oracle
+</ResponseField>
+
+<ResponseField name="Prelaunch" type="OracleSource">
+  Pre-launch market oracle
+</ResponseField>
+
+<ResponseField name="PYTH_LAZER" type="OracleSource">
+  Pyth Lazer oracle (low-latency)
+</ResponseField>
+
+<ResponseField name="PYTH_LAZER_1K" type="OracleSource">
+  Pyth Lazer with 1000x scaling
+</ResponseField>
+
+<ResponseField name="PYTH_LAZER_1M" type="OracleSource">
+  Pyth Lazer with 1,000,000x scaling
+</ResponseField>
+
+<ResponseField name="PYTH_LAZER_STABLE_COIN" type="OracleSource">
+  Pyth Lazer stablecoin oracle
+</ResponseField>
+
+## Validate Oracle
+
+Check if oracle data is valid:
+
+```typescript
+import { isOracleValid, OracleValidity } from '@drift-labs/sdk';
+
+const perpMarket = driftClient.getPerpMarketAccount(0);
+const oraclePriceData = driftClient.getOraclePriceDataAndSlot(
+  perpMarket.amm.oracle,
+  perpMarket.amm.oracleSource
+);
+const state = driftClient.getStateAccount();
+const currentSlot = new BN(await driftClient.connection.getSlot());
+
+const validity = isOracleValid(
+  perpMarket.amm,
+  oraclePriceData.data,
+  state.oracleGuardRails.validity,
+  currentSlot
+);
+
+if (validity === OracleValidity.Valid) {
+  console.log('Oracle is valid');
+} else {
+  console.log('Oracle validity issue:', OracleValidity[validity]);
+}
+```
+
+## Check Oracle Divergence
+
+Check if oracle price diverges too much from mark price:
+
+```typescript
+import { isOracleTooDivergent, calculateReservePrice } from '@drift-labs/sdk';
+
+const perpMarket = driftClient.getPerpMarketAccount(0);
+const oraclePriceData = driftClient.getOraclePriceDataAndSlot(
+  perpMarket.amm.oracle,
+  perpMarket.amm.oracleSource
+);
+const state = driftClient.getStateAccount();
+
+const reservePrice = calculateReservePrice(perpMarket, oraclePriceData.data);
+
+const isDivergent = isOracleTooDivergent(
+  reservePrice,
+  oraclePriceData.data.price,
+  state.oracleGuardRails.priceDivergence.markOraclePercentDivergence
+);
+
+if (isDivergent) {
+  console.log('Oracle price diverges from mark price');
+}
+```
+
+## OracleInfo Type
+
+Oracle configuration for a market:
+
+```typescript
+type OracleInfo = {
+  publicKey: PublicKey;  // Oracle account address
+  source: OracleSource;  // Oracle source type
+};
+```
+
+## Price Precision
+
+All prices in Drift Protocol use `PRICE_PRECISION` (1e6):
+
+```typescript
+import { PRICE_PRECISION } from '@drift-labs/sdk';
+
+// Convert oracle price to UI price
+const uiPrice = oraclePriceData.data.price.toNumber() / PRICE_PRECISION.toNumber();
+console.log('UI Price: $', uiPrice);
+
+// Convert UI price to oracle price
+const oraclePrice = PRICE_PRECISION.muln(30); // $30
+```
+
+## Related Types
+
+- [Perpetual Markets](/api/markets/perp-markets)
+- [Spot Markets](/api/markets/spot-markets)

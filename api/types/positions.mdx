@@ -1,0 +1,383 @@
+---
+title: Position Types
+description: Position-related type definitions for Drift Protocol v2
+---
+
+Position types represent user holdings in perpetual and spot markets.
+
+## PerpPosition
+
+Represents a perpetual futures position.
+
+<ResponseField name="baseAssetAmount" type="BN" required>
+  Size of the position in base asset units (positive for long, negative for short)
+</ResponseField>
+
+<ResponseField name="quoteAssetAmount" type="BN" required>
+  Quote asset amount for the position (tracks notional value)
+</ResponseField>
+
+<ResponseField name="quoteEntryAmount" type="BN" required>
+  Quote entry amount (used for PnL calculation)
+</ResponseField>
+
+<ResponseField name="quoteBreakEvenAmount" type="BN" required>
+  Quote break-even amount including fees
+</ResponseField>
+
+<ResponseField name="marketIndex" type="number" required>
+  Index of the perpetual market
+</ResponseField>
+
+<ResponseField name="lastCumulativeFundingRate" type="BN" required>
+  Last cumulative funding rate applied to this position
+</ResponseField>
+
+<ResponseField name="openOrders" type="number" required>
+  Number of open orders for this market
+</ResponseField>
+
+<ResponseField name="openBids" type="BN" required>
+  Total bid amount from open orders
+</ResponseField>
+
+<ResponseField name="openAsks" type="BN" required>
+  Total ask amount from open orders
+</ResponseField>
+
+<ResponseField name="settledPnl" type="BN" required>
+  Settled profit and loss for this position
+</ResponseField>
+
+<ResponseField name="lpShares" type="BN" required>
+  Liquidity provider shares for this market
+</ResponseField>
+
+<ResponseField name="maxMarginRatio" type="number" required>
+  Maximum margin ratio for this position
+</ResponseField>
+
+<ResponseField name="positionFlag" type="number" required>
+  Position flags (isolated, being liquidated, etc.)
+</ResponseField>
+
+```typescript
+export type PerpPosition = {
+  baseAssetAmount: BN;
+  lastCumulativeFundingRate: BN;
+  marketIndex: number;
+  quoteAssetAmount: BN;
+  quoteEntryAmount: BN;
+  quoteBreakEvenAmount: BN;
+  openOrders: number;
+  openBids: BN;
+  openAsks: BN;
+  settledPnl: BN;
+  lpShares: BN;
+  remainderBaseAssetAmount: number;
+  maxMarginRatio: number;
+  lastQuoteAssetAmountPerLp: BN;
+  perLpBase: number;
+  positionFlag: number;
+  isolatedPositionScaledBalance: BN;
+};
+```
+
+## SpotPosition
+
+Represents a spot market position (deposit or borrow).
+
+<ResponseField name="marketIndex" type="number" required>
+  Index of the spot market
+</ResponseField>
+
+<ResponseField name="balanceType" type="SpotBalanceType" required>
+  Whether this is a DEPOSIT or BORROW position
+</ResponseField>
+
+<ResponseField name="scaledBalance" type="BN" required>
+  Scaled balance (multiply by cumulative interest to get actual balance)
+</ResponseField>
+
+<ResponseField name="openOrders" type="number" required>
+  Number of open orders for this market
+</ResponseField>
+
+<ResponseField name="openBids" type="BN" required>
+  Total bid amount from open orders
+</ResponseField>
+
+<ResponseField name="openAsks" type="BN" required>
+  Total ask amount from open orders
+</ResponseField>
+
+<ResponseField name="cumulativeDeposits" type="BN" required>
+  Cumulative deposits over lifetime
+</ResponseField>
+
+```typescript
+export type SpotPosition = {
+  marketIndex: number;
+  balanceType: SpotBalanceType;
+  scaledBalance: BN;
+  openOrders: number;
+  openBids: BN;
+  openAsks: BN;
+  cumulativeDeposits: BN;
+};
+```
+
+## PoolBalance
+
+Represents a balance in a pool (fee pool, PnL pool, etc.).
+
+<ResponseField name="scaledBalance" type="BN" required>
+  Scaled balance amount
+</ResponseField>
+
+<ResponseField name="marketIndex" type="number" required>
+  Market index this pool belongs to
+</ResponseField>
+
+```typescript
+export type PoolBalance = {
+  scaledBalance: BN;
+  marketIndex: number;
+};
+```
+
+## HealthComponent
+
+Breakdown of health calculation components.
+
+<ResponseField name="marketIndex" type="number" required>
+  Market index for this component
+</ResponseField>
+
+<ResponseField name="size" type="BN" required>
+  Size of the position or balance
+</ResponseField>
+
+<ResponseField name="value" type="BN" required>
+  Value in quote asset
+</ResponseField>
+
+<ResponseField name="weight" type="BN" required>
+  Weight applied (asset or liability weight)
+</ResponseField>
+
+<ResponseField name="weightedValue" type="BN" required>
+  Final weighted value
+</ResponseField>
+
+```typescript
+export type HealthComponent = {
+  marketIndex: number;
+  size: BN;
+  value: BN;
+  weight: BN;
+  weightedValue: BN;
+};
+```
+
+## HealthComponents
+
+Complete breakdown of account health calculation.
+
+<ResponseField name="deposits" type="HealthComponent[]" required>
+  Array of deposit components
+</ResponseField>
+
+<ResponseField name="borrows" type="HealthComponent[]" required>
+  Array of borrow components
+</ResponseField>
+
+<ResponseField name="perpPositions" type="HealthComponent[]" required>
+  Array of perpetual position components
+</ResponseField>
+
+<ResponseField name="perpPnl" type="HealthComponent[]" required>
+  Array of perpetual PnL components
+</ResponseField>
+
+```typescript
+export type HealthComponents = {
+  deposits: HealthComponent[];
+  borrows: HealthComponent[];
+  perpPositions: HealthComponent[];
+  perpPnl: HealthComponent[];
+};
+```
+
+## AccountLiquidatableStatus
+
+Indicates whether an account can be liquidated.
+
+<ResponseField name="canBeLiquidated" type="boolean" required>
+  Whether the account is eligible for liquidation
+</ResponseField>
+
+<ResponseField name="marginRequirement" type="BN" required>
+  Total margin requirement for the account
+</ResponseField>
+
+<ResponseField name="totalCollateral" type="BN" required>
+  Total collateral value
+</ResponseField>
+
+```typescript
+export type AccountLiquidatableStatus = {
+  canBeLiquidated: boolean;
+  marginRequirement: BN;
+  totalCollateral: BN;
+};
+```
+
+## LiquidationRecord
+
+Record of a liquidation event.
+
+<ResponseField name="ts" type="BN" required>
+  Timestamp of liquidation
+</ResponseField>
+
+<ResponseField name="user" type="PublicKey" required>
+  User being liquidated
+</ResponseField>
+
+<ResponseField name="liquidator" type="PublicKey" required>
+  Liquidator account
+</ResponseField>
+
+<ResponseField name="liquidationType" type="LiquidationType" required>
+  Type of liquidation
+</ResponseField>
+
+<ResponseField name="marginRequirement" type="BN" required>
+  Margin requirement at time of liquidation
+</ResponseField>
+
+<ResponseField name="totalCollateral" type="BN" required>
+  Total collateral at time of liquidation
+</ResponseField>
+
+<ResponseField name="marginFreed" type="BN" required>
+  Margin freed by liquidation
+</ResponseField>
+
+<ResponseField name="bankrupt" type="boolean" required>
+  Whether the account was bankrupt
+</ResponseField>
+
+```typescript
+export type LiquidationRecord = {
+  ts: BN;
+  user: PublicKey;
+  liquidator: PublicKey;
+  liquidationType: LiquidationType;
+  marginRequirement: BN;
+  totalCollateral: BN;
+  marginFreed: BN;
+  liquidationId: number;
+  bankrupt: boolean;
+  canceledOrderIds: BN[];
+  liquidatePerp: LiquidatePerpRecord;
+  liquidateSpot: LiquidateSpotRecord;
+  liquidateBorrowForPerpPnl: LiquidateBorrowForPerpPnlRecord;
+  liquidatePerpPnlForDeposit: LiquidatePerpPnlForDepositRecord;
+  perpBankruptcy: PerpBankruptcyRecord;
+  spotBankruptcy: SpotBankruptcyRecord;
+};
+```
+
+## SettlePnlRecord
+
+Record of a PnL settlement event.
+
+<ResponseField name="ts" type="BN" required>
+  Timestamp of settlement
+</ResponseField>
+
+<ResponseField name="user" type="PublicKey" required>
+  User account
+</ResponseField>
+
+<ResponseField name="marketIndex" type="number" required>
+  Market index
+</ResponseField>
+
+<ResponseField name="pnl" type="BN" required>
+  Settled PnL amount
+</ResponseField>
+
+<ResponseField name="baseAssetAmount" type="BN" required>
+  Base asset amount of position
+</ResponseField>
+
+<ResponseField name="quoteAssetAmountAfter" type="BN" required>
+  Quote asset amount after settlement
+</ResponseField>
+
+<ResponseField name="settlePrice" type="BN" required>
+  Price at which settlement occurred
+</ResponseField>
+
+<ResponseField name="explanation" type="SettlePnlExplanation" required>
+  Reason for settlement
+</ResponseField>
+
+```typescript
+export type SettlePnlRecord = {
+  ts: BN;
+  user: PublicKey;
+  marketIndex: number;
+  pnl: BN;
+  baseAssetAmount: BN;
+  quoteAssetAmountAfter: BN;
+  quoteEntryAmount: BN;
+  settlePrice: BN;
+  explanation: SettlePnlExplanation;
+};
+```
+
+## FundingPaymentRecord
+
+Record of a funding payment.
+
+<ResponseField name="ts" type="BN" required>
+  Timestamp of funding payment
+</ResponseField>
+
+<ResponseField name="userAuthority" type="PublicKey" required>
+  User authority
+</ResponseField>
+
+<ResponseField name="user" type="PublicKey" required>
+  User account
+</ResponseField>
+
+<ResponseField name="marketIndex" type="number" required>
+  Market index
+</ResponseField>
+
+<ResponseField name="fundingPayment" type="BN" required>
+  Funding payment amount (positive = paid, negative = received)
+</ResponseField>
+
+<ResponseField name="baseAssetAmount" type="BN" required>
+  Position size at time of payment
+</ResponseField>
+
+```typescript
+export type FundingPaymentRecord = {
+  ts: BN;
+  userAuthority: PublicKey;
+  user: PublicKey;
+  marketIndex: number;
+  fundingPayment: BN;
+  baseAssetAmount: BN;
+  userLastCumulativeFunding: BN;
+  ammCumulativeFundingLong: BN;
+  ammCumulativeFundingShort: BN;
+};
+```

@@ -1,0 +1,475 @@
+---
+title: Account Subscriptions
+description: Real-time account data updates with WebSocket, Polling, and gRPC
+---
+
+Drift SDK supports three subscription mechanisms for receiving account updates: Polling, WebSocket, and gRPC. Each has different trade-offs for latency, reliability, and resource usage.
+
+## Subscription Types Overview
+
+<CardGroup cols={3}>
+  <Card title="Polling" icon="rotate">
+    **Best for**: Most applications
+    - Batched account fetches
+    - Predictable RPC usage
+    - Good performance
+  </Card>
+  <Card title="WebSocket" icon="signal-stream">
+    **Best for**: Real-time updates
+    - Lower latency
+    - Event-driven
+    - Higher RPC load
+  </Card>
+  <Card title="gRPC" icon="bolt">
+    **Best for**: High frequency
+    - Lowest latency
+    - Highest throughput
+    - Requires infrastructure
+  </Card>
+</CardGroup>
+
+## Polling Subscription
+
+Polling is the recommended approach for most applications. It uses `BulkAccountLoader` to batch account fetches efficiently.
+
+### Setup
+
+```typescript
+import {
+  DriftClient,
+  BulkAccountLoader,
+  User,
+} from '@drift-labs/sdk';
+import { Connection } from '@solana/web3.js';
+
+const connection = new Connection(process.env.RPC_URL!);
+
+// Create bulk account loader
+const bulkAccountLoader = new BulkAccountLoader(
+  connection,
+  'confirmed', // commitment
+  1000 // polling frequency in milliseconds
+);
+
+// Initialize DriftClient with polling
+const driftClient = new DriftClient({
+  connection,
+  wallet,
+  programID,
+  accountSubscription: {
+    type: 'polling',
+    accountLoader: bulkAccountLoader,
+  },
+});
+
+await driftClient.subscribe();
+
+// Create User with same account loader
+const user = new User({
+  driftClient,
+  userAccountPublicKey: await driftClient.getUserAccountPublicKey(),
+  accountSubscription: {
+    type: 'polling',
+    accountLoader: bulkAccountLoader,
+  },
+});
+
+await user.subscribe();
+```
+
+### Configuration
+
+<ParamField path="accountLoader" type="BulkAccountLoader" required>
+  Shared BulkAccountLoader instance for batching
+</ParamField>
+
+<ParamField path="pollingFrequency" type="number">
+  Milliseconds between polls (default: 1000)
+</ParamField>
+
+### Advantages
+
+- **Efficient**: Batches multiple account fetches into single RPC calls
+- **Predictable**: Constant RPC load
+- **Reliable**: No WebSocket connection issues
+- **Shared**: One loader can serve multiple accounts
+
+### Example: Multiple Users
+
+```typescript
+// Share one BulkAccountLoader across multiple users
+const bulkAccountLoader = new BulkAccountLoader(connection, 'confirmed', 1000);
+
+const users: User[] = [];
+for (let subAccountId = 0; subAccountId < 3; subAccountId++) {
+  const user = new User({
+    driftClient,
+    userAccountPublicKey: await driftClient.getUserAccountPublicKey(subAccountId),
+    accountSubscription: {
+      type: 'polling',
+      accountLoader: bulkAccountLoader,
+    },
+  });
+  
+  await user.subscribe();
+  users.push(user);
+}
+
+// All users share the same polling mechanism
+```
+
+## WebSocket Subscription
+
+WebSocket provides real-time updates via Solana's account change notifications.
+
+### Setup
+
+```typescript
+import { DriftClient, User } from '@drift-labs/sdk';
+
+// Initialize DriftClient with WebSocket
+const driftClient = new DriftClient({
+  connection,
+  wallet,
+  programID,
+  accountSubscription: {
+    type: 'websocket',
+    resubscriptionOptions: {
+      resubscribe: true,
+      resubTimeoutMs: 30000,
+      logResubscriptionErrors: true,
+    },
+  },
+});
+
+await driftClient.subscribe();
+
+// Create User with WebSocket
+const user = new User({
+  driftClient,
+  userAccountPublicKey: await driftClient.getUserAccountPublicKey(),
+  accountSubscription: {
+    type: 'websocket',
+    resubscriptionOptions: {
+      resubscribe: true,
+      resubTimeoutMs: 30000,
+    },
+  },
+});
+
+await user.subscribe();
+```
+
+### Resubscription Options
+
+<ParamField path="resubscribe" type="boolean">
+  Automatically reconnect on disconnect (recommended: true)
+</ParamField>
+
+<ParamField path="resubTimeoutMs" type="number">
+  Timeout before resubscription attempt (default: 30000)
+</ParamField>
+
+<ParamField path="logResubscriptionErrors" type="boolean">
+  Log errors during resubscription attempts
+</ParamField>
+
+### Handling Events
+
+```typescript
+// Listen for updates
+user.eventEmitter.on('userAccountUpdate', (userAccount) => {
+  console.log('User account updated');
+  console.log('Positions:', userAccount.perpPositions.length);
+  console.log('Orders:', userAccount.orders.length);
+});
+
+// Listen for errors
+user.eventEmitter.on('error', (error) => {
+  console.error('WebSocket error:', error);
+  // Implement error handling/fallback
+});
+
+// DriftClient events
+driftClient.eventEmitter.on('perpMarketAccountUpdate', (market) => {
+  console.log(`Market ${market.marketIndex} updated`);
+});
+
+driftClient.eventEmitter.on('oraclePriceUpdate', (pubkey, source, data) => {
+  console.log('Oracle price:', data.price.toString());
+});
+```
+
+### Advantages
+
+- **Low latency**: Immediate updates on account changes
+- **Event-driven**: React to changes as they happen
+- **Real-time**: Best for market making and high-frequency strategies
+
+### Considerations
+
+<Warning>
+  WebSocket connections can disconnect. Always implement resubscription logic and error handling.
+</Warning>
+
+## gRPC Subscription
+
+gRPC provides the lowest latency and highest throughput using Yellowstone or Laser gRPC infrastructure.
+
+### Prerequisites
+
+- Access to a Yellowstone or Laser gRPC endpoint
+- Authentication token
+
+### Setup with Yellowstone
+
+```typescript
+import { DriftClient, GrpcConfigs } from '@drift-labs/sdk';
+
+const grpcConfig: GrpcConfigs = {
+  endpoint: 'https://your-grpc-endpoint.com',
+  token: process.env.GRPC_TOKEN!,
+  channelOptions: {
+    'grpc.max_receive_message_length': 1024 * 1024 * 100,
+  },
+};
+
+const driftClient = new DriftClient({
+  connection,
+  wallet,
+  programID,
+  accountSubscription: {
+    type: 'grpc',
+    grpcConfig,
+  },
+});
+
+await driftClient.subscribe();
+```
+
+### Setup with Laser (Helius)
+
+```typescript
+import { LaserstreamConfig } from '@drift-labs/sdk';
+
+const laserConfig: LaserstreamConfig = {
+  apiKey: process.env.HELIUS_API_KEY!,
+};
+
+const driftClient = new DriftClient({
+  connection,
+  wallet,
+  programID,
+  accountSubscription: {
+    type: 'grpc',
+    grpcConfig: laserConfig,
+  },
+});
+
+await driftClient.subscribe();
+```
+
+### Configuration
+
+<ParamField path="endpoint" type="string" required>
+  gRPC server endpoint URL
+</ParamField>
+
+<ParamField path="token" type="string">
+  Authentication token
+</ParamField>
+
+<ParamField path="channelOptions" type="object">
+  gRPC channel configuration options
+</ParamField>
+
+### Advantages
+
+- **Lowest latency**: Sub-millisecond updates
+- **High throughput**: Handle many accounts efficiently
+- **Reliable**: Dedicated infrastructure
+- **Professional**: Used by market makers
+
+### Considerations
+
+<Info>
+  gRPC requires additional infrastructure and typically costs more than standard RPC. Best for professional trading operations.
+</Info>
+
+## Listening to Updates
+
+All subscription types emit events that you can listen to:
+
+### User Account Updates
+
+```typescript
+user.eventEmitter.on('userAccountUpdate', (userAccount) => {
+  // User account changed
+  console.log('Authority:', userAccount.authority.toBase58());
+  console.log('Settled PnL:', userAccount.settledPerpPnl.toString());
+  
+  // Check positions
+  for (const position of userAccount.perpPositions) {
+    if (!positionIsAvailable(position)) {
+      console.log(
+        `Position ${position.marketIndex}:`,
+        position.baseAssetAmount.toString()
+      );
+    }
+  }
+  
+  // Check orders
+  for (const order of userAccount.orders) {
+    if (order.status === OrderStatus.OPEN) {
+      console.log(
+        `Order ${order.orderId}:`,
+        order.baseAssetAmount.toString()
+      );
+    }
+  }
+});
+```
+
+### Market Updates
+
+```typescript
+driftClient.eventEmitter.on('perpMarketAccountUpdate', (market) => {
+  console.log(`Market ${market.marketIndex} updated`);
+  console.log('AMM base reserve:', market.amm.baseAssetReserve.toString());
+  console.log('AMM quote reserve:', market.amm.quoteAssetReserve.toString());
+});
+
+driftClient.eventEmitter.on('spotMarketAccountUpdate', (market) => {
+  console.log(`Spot market ${market.marketIndex} updated`);
+  console.log('Deposit balance:', market.depositBalance.toString());
+  console.log('Borrow balance:', market.borrowBalance.toString());
+});
+```
+
+### Oracle Price Updates
+
+```typescript
+driftClient.eventEmitter.on('oraclePriceUpdate', (pubkey, source, data) => {
+  console.log('Oracle updated:', pubkey.toBase58());
+  console.log('Price:', convertToNumber(data.price, PRICE_PRECISION));
+  console.log('Confidence:', data.confidence.toString());
+  console.log('Slot:', data.slot);
+});
+```
+
+## Subscription Lifecycle
+
+### Subscribing
+
+```typescript
+// Subscribe to start receiving updates
+await driftClient.subscribe();
+await user.subscribe();
+
+console.log('Subscribed to account updates');
+```
+
+### Unsubscribing
+
+```typescript
+// Always unsubscribe when done to prevent memory leaks
+await user.unsubscribe();
+await driftClient.unsubscribe();
+
+console.log('Unsubscribed from account updates');
+```
+
+### Fetching Latest Data
+
+```typescript
+// Force fetch latest data (useful for polling)
+await user.fetchAccounts();
+await driftClient.fetchAccounts();
+
+const userAccount = user.getUserAccount();
+console.log('Latest user account data fetched');
+```
+
+## Best Practices
+
+<Accordion title="Choose the right subscription type">
+  - **Polling**: Default choice for most applications
+  - **WebSocket**: When you need real-time updates and can handle reconnections
+  - **gRPC**: For professional market making and HFT
+</Accordion>
+
+<Accordion title="Share BulkAccountLoader instances">
+  ```typescript
+  // Good: Share one loader
+  const loader = new BulkAccountLoader(connection, 'confirmed', 1000);
+  const client = new DriftClient({ accountSubscription: { type: 'polling', accountLoader: loader } });
+  const user = new User({ accountSubscription: { type: 'polling', accountLoader: loader } });
+  
+  // Bad: Create multiple loaders
+  const loader1 = new BulkAccountLoader(...);
+  const loader2 = new BulkAccountLoader(...); // Wasteful!
+  ```
+</Accordion>
+
+<Accordion title="Handle errors gracefully">
+  ```typescript
+  user.eventEmitter.on('error', async (error) => {
+    console.error('Subscription error:', error);
+    
+    // Attempt to resubscribe
+    try {
+      await user.unsubscribe();
+      await user.subscribe();
+      console.log('Resubscribed successfully');
+    } catch (resubError) {
+      console.error('Failed to resubscribe:', resubError);
+      // Implement fallback logic
+    }
+  });
+  ```
+</Accordion>
+
+<Accordion title="Monitor subscription health">
+  ```typescript
+  // Check if still subscribed
+  if (!user.isSubscribed) {
+    console.warn('User subscription lost');
+    await user.subscribe();
+  }
+  
+  // Periodic health check
+  setInterval(async () => {
+    if (!user.isSubscribed) {
+      console.warn('Resubscribing user...');
+      await user.subscribe();
+    }
+  }, 30000); // Check every 30s
+  ```
+</Accordion>
+
+## Performance Comparison
+
+| Feature | Polling | WebSocket | gRPC |
+|---------|---------|-----------|------|
+| Latency | ~1s | ~100-500ms | ~10-50ms |
+| RPC Load | Low | High | N/A |
+| Reliability | High | Medium | High |
+| Setup Complexity | Low | Low | High |
+| Cost | Standard RPC | Standard RPC | Premium |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Account Subscribers API" icon="code" href="/api/account-subscribers/overview">
+    Detailed API documentation
+  </Card>
+  <Card title="Oracle Integration" icon="eye" href="/guides/oracle-integration">
+    Work with oracle price feeds
+  </Card>
+  <Card title="WebSocket API" icon="signal-stream" href="/api/account-subscribers/websocket">
+    WebSocket subscriber reference
+  </Card>
+  <Card title="gRPC API" icon="bolt" href="/api/account-subscribers/grpc">
+    gRPC subscriber reference
+  </Card>
+</CardGroup>

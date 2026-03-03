@@ -1,0 +1,423 @@
+---
+title: 'Orders'
+description: 'Order types, parameters, and execution behavior in Drift Protocol'
+---
+
+## Order Structure
+
+Every order in Drift has a comprehensive structure tracking its state and parameters:
+
+```typescript sdk/src/types.ts
+export type Order = {
+  status: OrderStatus;
+  orderType: OrderType;
+  marketType: MarketType;
+  slot: BN;
+  orderId: number;
+  userOrderId: number;
+  marketIndex: number;
+  price: BN;
+  baseAssetAmount: BN;
+  quoteAssetAmount: BN;
+  baseAssetAmountFilled: BN;
+  quoteAssetAmountFilled: BN;
+  direction: PositionDirection;
+  reduceOnly: boolean;
+  triggerPrice: BN;
+  triggerCondition: OrderTriggerCondition;
+  existingPositionDirection: PositionDirection;
+  postOnly: boolean;
+  immediateOrCancel: boolean;
+  oraclePriceOffset: number;
+  auctionDuration: number;
+  auctionStartPrice: BN;
+  auctionEndPrice: BN;
+  maxTs: BN;
+  bitFlags: number;
+  postedSlotTail: number;
+};
+```
+
+## Order Types
+
+Drift supports several order types with different execution characteristics:
+
+```typescript sdk/src/types.ts
+export class OrderType {
+  static readonly LIMIT = { limit: {} };
+  static readonly TRIGGER_MARKET = { triggerMarket: {} };
+  static readonly TRIGGER_LIMIT = { triggerLimit: {} };
+  static readonly MARKET = { market: {} };
+  static readonly ORACLE = { oracle: {} };
+}
+```
+
+### Market Orders
+
+Market orders execute immediately at the best available price:
+
+- Fill against the AMM or matching limit orders
+- May use Dutch auction for better price discovery
+- No price limit (except max slippage from auction)
+- Default auction duration: configured per market
+
+<Info>
+Market orders use a brief Dutch auction by default, starting at a premium/discount to the oracle price and converging toward the oracle price over time.
+</Info>
+
+### Limit Orders
+
+Limit orders specify a maximum/minimum price:
+
+- **Long**: Fill at `price` or better (lower)
+- **Short**: Fill at `price` or better (higher)
+- Rest on the orderbook if not immediately fillable
+- Can be maker or taker depending on execution
+
+**Example:**
+```typescript
+const orderParams: OrderParams = {
+  orderType: OrderType.LIMIT,
+  marketType: MarketType.PERP,
+  direction: PositionDirection.LONG,
+  baseAssetAmount: new BN(1000000000), // 1 SOL-PERP
+  price: new BN(100000000),            // $100 limit
+  marketIndex: 0,
+  // ... other params
+};
+```
+
+### Trigger Orders
+
+Trigger orders activate when a condition is met:
+
+**Trigger Market**: Becomes a market order when triggered
+**Trigger Limit**: Becomes a limit order when triggered
+
+```typescript sdk/src/types.ts
+export class OrderTriggerCondition {
+  static readonly ABOVE = { above: {} };                 // Trigger when price > triggerPrice
+  static readonly BELOW = { below: {} };                 // Trigger when price < triggerPrice
+  static readonly TRIGGERED_ABOVE = { triggeredAbove: {} }; // Has triggered (above)
+  static readonly TRIGGERED_BELOW = { triggeredBelow: {} }; // Has triggered (below)
+}
+```
+
+**Example Stop-Loss:**
+```typescript
+const stopLoss: OrderParams = {
+  orderType: OrderType.TRIGGER_MARKET,
+  direction: PositionDirection.SHORT, // Close long
+  triggerPrice: new BN(95000000),     // Trigger at $95
+  triggerCondition: OrderTriggerCondition.BELOW,
+  baseAssetAmount: positionSize,
+  // ... other params
+};
+```
+
+**Example Take-Profit:**
+```typescript
+const takeProfit: OrderParams = {
+  orderType: OrderType.TRIGGER_LIMIT,
+  direction: PositionDirection.SHORT, // Close long
+  triggerPrice: new BN(110000000),    // Trigger at $110
+  triggerCondition: OrderTriggerCondition.ABOVE,
+  price: new BN(109000000),           // Limit at $109
+  baseAssetAmount: positionSize,
+  // ... other params
+};
+```
+
+### Oracle Orders
+
+Oracle orders use an offset from the oracle price:
+
+```typescript
+const oracleOrder: OrderParams = {
+  orderType: OrderType.ORACLE,
+  direction: PositionDirection.LONG,
+  oraclePriceOffset: -1000000,        // -$1 from oracle
+  baseAssetAmount: new BN(1000000000),
+  // ... other params
+};
+```
+
+The effective limit price is: `oraclePrice + oraclePriceOffset`
+
+This allows orders to automatically track the oracle price.
+
+## Order Parameters
+
+When placing an order, you specify parameters:
+
+```typescript sdk/src/types.ts
+export type OrderParams = {
+  orderType: OrderType;
+  marketType: MarketType;
+  userOrderId: number;
+  direction: PositionDirection;
+  baseAssetAmount: BN;
+  price: BN;
+  marketIndex: number;
+  reduceOnly: boolean;
+  postOnly: PostOnlyParams;
+  bitFlags: number;
+  triggerPrice: BN | null;
+  triggerCondition: OrderTriggerCondition;
+  oraclePriceOffset: number | null;
+  auctionDuration: number | null;
+  maxTs: BN | null;
+  auctionStartPrice: BN | null;
+  auctionEndPrice: BN | null;
+};
+```
+
+### Post-Only Orders
+
+```typescript sdk/src/types.ts
+export class PostOnlyParams {
+  static readonly NONE = { none: {} };           // Can be maker or taker
+  static readonly MUST_POST_ONLY = { mustPostOnly: {} };  // Tx fails if taker
+  static readonly TRY_POST_ONLY = { tryPostOnly: {} };    // Skip if taker
+  static readonly SLIDE = { slide: {} };         // Adjust price to be maker
+}
+```
+
+- **MUST_POST_ONLY**: Transaction fails if order would immediately fill
+- **TRY_POST_ONLY**: Order is skipped if it would immediately fill
+- **SLIDE**: Price is adjusted to guarantee maker execution
+
+### Reduce-Only Orders
+
+Reduce-only orders can only decrease position size:
+
+- Cannot open a new position
+- Cannot increase existing position
+- Cannot flip position direction
+- Commonly used for stop-loss and take-profit orders
+
+```typescript
+const isReduceOnly = order.reduceOnly === true;
+```
+
+### Immediate-or-Cancel (IOC)
+
+IOC orders attempt to fill immediately and cancel any unfilled portion:
+
+```typescript sdk/src/types.ts
+export class OrderParamsBitFlag {
+  static readonly ImmediateOrCancel = 1;
+  static readonly UpdateHighLeverageMode = 2;
+}
+```
+
+Set via `immediateOrCancel: true` or in `bitFlags`.
+
+### Time-in-Force
+
+Orders can have an expiration time:
+
+```typescript
+const orderParams: OrderParams = {
+  // ... other params
+  maxTs: new BN(Date.now() / 1000 + 3600), // Expire in 1 hour
+};
+```
+
+Expired orders are automatically cancelled.
+
+## Order Status
+
+```typescript sdk/src/types.ts
+export class OrderStatus {
+  static readonly INIT = { init: {} };       // Initialized but not placed
+  static readonly OPEN = { open: {} };       // Active on orderbook
+  static readonly FILLED = { filled: {} };   // Completely filled
+  static readonly CANCELED = { canceled: {} }; // Cancelled
+}
+```
+
+## Order Execution
+
+### Dutch Auction Mechanism
+
+Most orders use a Dutch auction for better price discovery:
+
+1. **Auction Start**: Order starts at a premium (buy) or discount (sell)
+2. **Price Improvement**: Price moves toward oracle price over time
+3. **Auction End**: After `auctionDuration` slots, fills at oracle price
+4. **Early Fill**: Can fill at improved price during auction
+
+**Auction Price Calculation:**
+
+```typescript sdk/src/math/auction.ts
+export function getAuctionPrice(
+  order: Order,
+  slot: number,
+  oraclePrice: BN
+): BN
+```
+
+The auction price interpolates between `auctionStartPrice` and `auctionEndPrice` based on slots elapsed.
+
+### Order Matching
+
+Orders can be filled through multiple sources:
+
+1. **DLOB Matching**: Against resting limit orders
+2. **AMM Fill**: Against the protocol AMM
+3. **JIT (Just-in-Time) Auction**: Keeper provides liquidity during auction
+4. **External DEX**: Through Serum, Phoenix, or OpenBook v2
+
+```typescript sdk/src/types.ts
+export class OrderActionExplanation {
+  static readonly ORDER_FILLED_WITH_MATCH = { orderFilledWithMatch: {} };
+  static readonly ORDER_FILLED_WITH_AMM = { orderFilledWithAmm: {} };
+  static readonly ORDER_FILLED_WITH_AMM_JIT = { orderFilledWithAmmJit: {} };
+  static readonly ORDER_FILLED_WITH_OPENBOOK_V2 = { orderFilledWithOpenbookV2: {} };
+  // ... additional explanations
+}
+```
+
+### Fill Price Priority
+
+When matching orders, the best price for the taker is selected:
+
+- For buys: lowest price wins
+- For sells: highest price wins
+- Considers all available liquidity sources
+- Auction mechanism provides time for price competition
+
+## Scale Orders
+
+Place multiple orders across a price range:
+
+```typescript sdk/src/types.ts
+export type ScaleOrderParams = {
+  marketType: MarketType;
+  direction: PositionDirection;
+  marketIndex: number;
+  totalBaseAssetAmount: BN;     // Total size to distribute
+  startPrice: BN;               // First order price
+  endPrice: BN;                 // Last order price
+  orderCount: number;           // Number of orders (2-32)
+  sizeDistribution: SizeDistribution;
+  reduceOnly: boolean;
+  postOnly: PostOnlyParams;
+  bitFlags: number;
+  maxTs: BN | null;
+};
+
+export class SizeDistribution {
+  static readonly FLAT = { flat: {} };           // Equal sizes
+  static readonly ASCENDING = { ascending: {} };  // Smallest → largest
+  static readonly DESCENDING = { descending: {} }; // Largest → smallest
+}
+```
+
+**Example:**
+```typescript
+const scaleOrder: ScaleOrderParams = {
+  marketType: MarketType.PERP,
+  direction: PositionDirection.LONG,
+  marketIndex: 0,
+  totalBaseAssetAmount: new BN(10000000000), // 10 SOL
+  startPrice: new BN(95000000),   // $95
+  endPrice: new BN(90000000),     // $90
+  orderCount: 5,                  // 5 orders
+  sizeDistribution: SizeDistribution.FLAT,
+  // ... other params
+};
+```
+
+This creates 5 buy orders at $95, $93.75, $92.50, $91.25, and $90, each for 2 SOL.
+
+## Order Events
+
+Order actions emit events:
+
+```typescript sdk/src/types.ts
+export type OrderActionRecord = {
+  ts: BN;
+  action: OrderAction;
+  actionExplanation: OrderActionExplanation;
+  marketIndex: number;
+  marketType: MarketType;
+  filler: PublicKey | null;
+  fillerReward: BN | null;
+  fillRecordId: BN | null;
+  baseAssetAmountFilled: BN | null;
+  quoteAssetAmountFilled: BN | null;
+  takerFee: BN | null;
+  makerFee: BN | null;
+  referrerReward: number | null;
+  // ... additional fields
+};
+
+export class OrderAction {
+  static readonly PLACE = { place: {} };
+  static readonly CANCEL = { cancel: {} };
+  static readonly EXPIRE = { expire: {} };
+  static readonly FILL = { fill: {} };
+  static readonly TRIGGER = { trigger: {} };
+}
+```
+
+## Order Management
+
+### Modifying Orders
+
+Orders can be modified with certain constraints:
+
+```typescript sdk/src/types.ts
+export type ModifyOrderParams = {
+  [Property in keyof OrderParams]?: OrderParams[Property] | null;
+} & { policy?: ModifyOrderPolicy };
+
+export enum ModifyOrderPolicy {
+  MustModify = 1,
+  ExcludePreviousFill = 2,
+}
+```
+
+- **MustModify**: Transaction fails if order cannot be modified
+- **ExcludePreviousFill**: Ignore fills that occurred in the same slot
+
+### Cancelling Orders
+
+Orders can be cancelled:
+- By the user at any time
+- Automatically when expired (`maxTs` reached)
+- When user is liquidated (risk-increasing orders)
+- When reduce-only conditions are violated
+
+## Protected Maker Mode
+
+Markets can enable protected maker mode for certain users:
+
+```typescript sdk/src/types.ts
+export type ProtectedMakerParams = {
+  limitPriceDivisor: number;
+  tickSize: BN;
+  dynamicOffset: BN;
+};
+```
+
+Protected makers get price adjustments to ensure maker status and better fill prices.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Positions" icon="chart-area" href="/concepts/positions">
+    See how orders create and modify positions
+  </Card>
+  <Card title="Markets" icon="store" href="/concepts/markets">
+    Understand market mechanics for order execution
+  </Card>
+  <Card title="Margin System" icon="scale-balanced" href="/concepts/margin">
+    Learn margin requirements for orders
+  </Card>
+  <Card title="SDK Guide" icon="code" href="/sdk/orders">
+    Implementation guide for placing orders
+  </Card>
+</CardGroup>

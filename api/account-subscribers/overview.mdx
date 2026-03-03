@@ -1,0 +1,203 @@
+---
+title: Account Subscribers Overview
+description: Learn about account subscription mechanisms in Drift Protocol v2
+---
+
+Account subscribers provide real-time updates for on-chain account data in Drift Protocol. The SDK offers three subscription mechanisms: WebSocket, Polling, and gRPC, each optimized for different use cases.
+
+## Subscription Types
+
+Drift Protocol v2 provides three primary subscription mechanisms:
+
+### WebSocket Subscribers
+
+WebSocket-based subscribers use Solana's native `accountSubscribe` RPC method to receive real-time updates. Best for:
+- Low-latency requirements
+- Real-time trading applications
+- When using public RPC endpoints
+
+**Key Classes:**
+- `WebSocketUserAccountSubscriber` - Subscribe to user account updates
+- `WebSocketDriftClientAccountSubscriber` - Subscribe to markets, state, and oracle data
+- `WebSocketProgramAccountSubscriber` - Subscribe to multiple accounts by program
+
+### Polling Subscribers
+
+Polling-based subscribers use the `BulkAccountLoader` to periodically fetch account data. Best for:
+- Rate-limited RPC endpoints
+- Batch processing scenarios
+- When WebSocket connections are unreliable
+
+**Key Classes:**
+- `PollingUserAccountSubscriber` - Poll user account updates
+- `PollingDriftClientAccountSubscriber` - Poll markets, state, and oracle data
+- `BulkAccountLoader` - Efficient batch account loading
+
+### gRPC Subscribers
+
+gRPC-based subscribers use Yellowstone or Laser gRPC streams for high-performance data streaming. Best for:
+- High-frequency trading
+- Maximum throughput requirements
+- When using dedicated gRPC infrastructure
+
+**Key Classes:**
+- `grpcUserAccountSubscriber` - Subscribe via gRPC to user accounts
+- `grpcDriftClientAccountSubscriber` - Subscribe via gRPC to markets and oracles
+- `grpcAccountSubscriber` - Generic gRPC account subscriber
+
+## Core Interfaces
+
+### AccountSubscriber
+
+Base interface for single account subscriptions:
+
+```typescript
+interface AccountSubscriber<T> {
+  dataAndSlot?: DataAndSlot<T>;
+  subscribe(onChange: (data: T) => void): Promise<void>;
+  fetch(): Promise<void>;
+  unsubscribe(): Promise<void>;
+  setData(account: T, slot?: number): void;
+}
+```
+
+### UserAccountSubscriber
+
+Interface for user account subscriptions:
+
+```typescript
+interface UserAccountSubscriber {
+  eventEmitter: StrictEventEmitter<EventEmitter, UserAccountEvents>;
+  isSubscribed: boolean;
+  
+  subscribe(userAccount?: UserAccount): Promise<boolean>;
+  fetch(): Promise<void>;
+  updateData(userAccount: UserAccount, slot: number): void;
+  unsubscribe(): Promise<void>;
+  
+  getUserAccountAndSlot(): DataAndSlot<UserAccount>;
+}
+```
+
+### DriftClientAccountSubscriber
+
+Interface for subscribing to Drift protocol accounts (markets, state, oracles):
+
+```typescript
+interface DriftClientAccountSubscriber {
+  eventEmitter: StrictEventEmitter<EventEmitter, DriftClientAccountEvents>;
+  isSubscribed: boolean;
+  
+  subscribe(): Promise<boolean>;
+  fetch(): Promise<void>;
+  unsubscribe(): Promise<void>;
+  
+  addPerpMarket(marketIndex: number): Promise<boolean>;
+  addSpotMarket(marketIndex: number): Promise<boolean>;
+  addOracle(oracleInfo: OracleInfo): Promise<boolean>;
+  
+  getStateAccountAndSlot(): DataAndSlot<StateAccount>;
+  getMarketAccountAndSlot(marketIndex: number): DataAndSlot<PerpMarketAccount> | undefined;
+  getSpotMarketAccountAndSlot(marketIndex: number): DataAndSlot<SpotMarketAccount> | undefined;
+  getOraclePriceDataAndSlot(oracleId: string): DataAndSlot<OraclePriceData> | undefined;
+}
+```
+
+## Common Types
+
+### DataAndSlot
+
+Wraps account data with its slot number:
+
+```typescript
+type DataAndSlot<T> = {
+  data: T;
+  slot: number;
+};
+```
+
+### ResubOpts
+
+Configuration for automatic resubscription:
+
+```typescript
+type ResubOpts = {
+  resubTimeoutMs?: number;           // Timeout before resubscribing
+  logResubMessages?: boolean;        // Log resubscription events
+  usePollingInsteadOfResub?: boolean; // Use polling for resubscription
+  pollingIntervalMs?: number;        // Polling interval in ms
+};
+```
+
+## Event Types
+
+### UserAccountEvents
+
+```typescript
+interface UserAccountEvents {
+  userAccountUpdate: (payload: UserAccount) => void;
+  update: void;
+  error: (e: Error) => void;
+}
+```
+
+### DriftClientAccountEvents
+
+```typescript
+interface DriftClientAccountEvents {
+  stateAccountUpdate: (payload: StateAccount) => void;
+  perpMarketAccountUpdate: (payload: PerpMarketAccount) => void;
+  spotMarketAccountUpdate: (payload: SpotMarketAccount) => void;
+  oraclePriceUpdate: (
+    publicKey: PublicKey,
+    oracleSource: OracleSource,
+    data: OraclePriceData
+  ) => void;
+  userAccountUpdate: (payload: UserAccount) => void;
+  update: void;
+  error: (e: Error) => void;
+}
+```
+
+## Choosing a Subscriber Type
+
+| Feature | WebSocket | Polling | gRPC |
+|---------|-----------|---------|------|
+| Latency | Low | Medium | Very Low |
+| Resource Usage | Medium | Low | High |
+| Reliability | Medium | High | High |
+| RPC Calls | Minimal | Frequent | None |
+| Setup Complexity | Low | Low | High |
+| Best For | General use | Rate limits | HFT |
+
+## Error Handling
+
+All subscribers can throw `NotSubscribedError` if methods are called before subscribing:
+
+```typescript
+class NotSubscribedError extends Error {
+  name = 'NotSubscribedError';
+}
+```
+
+Handle errors using event emitters:
+
+```typescript
+subscriber.eventEmitter.on('error', (error: Error) => {
+  console.error('Subscription error:', error);
+});
+```
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="WebSocket Subscribers" icon="wifi" href="/api/account-subscribers/websocket">
+    Learn about WebSocket-based subscriptions
+  </Card>
+  <Card title="Polling Subscribers" icon="rotate" href="/api/account-subscribers/polling">
+    Learn about polling-based subscriptions
+  </Card>
+  <Card title="gRPC Subscribers" icon="bolt" href="/api/account-subscribers/grpc">
+    Learn about gRPC-based subscriptions
+  </Card>
+</CardGroup>

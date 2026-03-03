@@ -1,0 +1,490 @@
+---
+title: 'Position Management'
+description: 'Position tracking, PnL calculation, and position management utilities in Drift Protocol v2'
+---
+
+## Overview
+
+The position management module provides functions for calculating position metrics, unrealized PnL, funding payments, and other position-related data.
+
+## Position Calculation Functions
+
+### calculatePositionPNL
+
+Calculates the unrealized PnL for a perpetual position.
+
+**Formula:** BaseAssetAmount × (Avg Exit Price - Avg Entry Price)
+
+```typescript
+import { calculatePositionPNL } from '@drift-labs/sdk';
+
+const pnl = calculatePositionPNL(
+  perpMarket,
+  perpPosition,
+  true, // include funding
+  oraclePriceData
+);
+
+console.log('Position PnL:', pnl.toString());
+```
+
+**Parameters:**
+
+<ParamField path="market" type="PerpMarketAccount" required>
+  The perpetual market account.
+</ParamField>
+
+<ParamField path="perpPosition" type="PerpPosition" required>
+  The user's perpetual position.
+</ParamField>
+
+<ParamField path="withFunding" type="boolean" default="false">
+  Whether to include unrealized funding payment PnL in the result.
+</ParamField>
+
+<ParamField path="oraclePriceData" type="OraclePriceData" required>
+  Oracle price data containing the current price.
+</ParamField>
+
+**Returns:** BN - Position PnL in QUOTE_PRECISION (1e6)
+
+### calculateBaseAssetValue
+
+Calculates the market value of closing the entire position.
+
+```typescript
+import { calculateBaseAssetValue } from '@drift-labs/sdk';
+
+const positionValue = calculateBaseAssetValue(
+  perpMarket,
+  perpPosition,
+  mmOraclePriceData,
+  true, // use spread
+  false, // don't skip AMM update
+  latestSlot
+);
+```
+
+**Parameters:**
+
+<ParamField path="market" type="PerpMarketAccount" required>
+  The perpetual market account.
+</ParamField>
+
+<ParamField path="userPosition" type="PerpPosition" required>
+  The user's position.
+</ParamField>
+
+<ParamField path="mmOraclePriceData" type="MMOraclePriceData" required>
+  Market maker oracle price data.
+</ParamField>
+
+<ParamField path="useSpread" type="boolean" default="true">
+  Whether to apply AMM spread to the calculation.
+</ParamField>
+
+<ParamField path="skipUpdate" type="boolean" default="false">
+  Whether to skip AMM updates before calculation.
+</ParamField>
+
+<ParamField path="latestSlot" type="BN">
+  Latest slot for accurate AMM state.
+</ParamField>
+
+**Returns:** BN - Base asset value in QUOTE_PRECISION (1e6)
+
+### calculateClaimablePnl
+
+Calculates the claimable (settleable) PnL for a position, accounting for pool limitations.
+
+```typescript
+import { calculateClaimablePnl } from '@drift-labs/sdk';
+
+const claimable = calculateClaimablePnl(
+  perpMarket,
+  spotMarket, // quote spot market
+  perpPosition,
+  oraclePriceData
+);
+```
+
+**Parameters:**
+
+<ParamField path="market" type="PerpMarketAccount" required>
+  The perpetual market account.
+</ParamField>
+
+<ParamField path="spotMarket" type="SpotMarketAccount" required>
+  The quote spot market account (usually USDC).
+</ParamField>
+
+<ParamField path="perpPosition" type="PerpPosition" required>
+  The user's perpetual position.
+</ParamField>
+
+<ParamField path="oraclePriceData" type="OraclePriceData" required>
+  Oracle price data.
+</ParamField>
+
+**Returns:** BN - Claimable PnL in QUOTE_PRECISION (1e6)
+
+## Funding Calculations
+
+### calculateUnsettledFundingPnl
+
+Calculates the unsettled funding payment PnL for a position.
+
+```typescript
+import { calculateUnsettledFundingPnl } from '@drift-labs/sdk';
+
+const fundingPnl = calculateUnsettledFundingPnl(
+  perpMarket,
+  perpPosition
+);
+
+console.log('Unsettled funding:', fundingPnl.toString());
+```
+
+**Parameters:**
+
+<ParamField path="market" type="PerpMarketAccount" required>
+  The perpetual market account.
+</ParamField>
+
+<ParamField path="perpPosition" type="PerpPosition" required>
+  The user's perpetual position.
+</ParamField>
+
+**Returns:** BN - Unsettled funding PnL in QUOTE_PRECISION (1e6)
+
+### calculateFeesAndFundingPnl
+
+Returns total fees and funding PnL for a position.
+
+```typescript
+import { calculateFeesAndFundingPnl } from '@drift-labs/sdk';
+
+const totalFeesFunding = calculateFeesAndFundingPnl(
+  perpMarket,
+  perpPosition,
+  true // include unsettled funding
+);
+```
+
+**Parameters:**
+
+<ParamField path="market" type="PerpMarketAccount" required>
+  The perpetual market account.
+</ParamField>
+
+<ParamField path="perpPosition" type="PerpPosition" required>
+  The user's perpetual position.
+</ParamField>
+
+<ParamField path="includeUnsettled" type="boolean" default="true">
+  Whether to include unsettled funding in the result.
+</ParamField>
+
+**Returns:** BN - Total fees and funding PnL in QUOTE_PRECISION (1e6)
+
+## Price Calculations
+
+### calculateBreakEvenPrice
+
+Calculates the break-even price for a position (entry price + fees + funding).
+
+```typescript
+import { calculateBreakEvenPrice } from '@drift-labs/sdk';
+
+const breakEven = calculateBreakEvenPrice(perpPosition);
+console.log('Break-even price:', breakEven.toString());
+```
+
+**Parameters:**
+
+<ParamField path="userPosition" type="PerpPosition" required>
+  The user's perpetual position.
+</ParamField>
+
+**Returns:** BN - Break-even price in PRICE_PRECISION (1e6)
+
+### calculateEntryPrice
+
+Calculates the average entry price for a position.
+
+```typescript
+import { calculateEntryPrice } from '@drift-labs/sdk';
+
+const entryPrice = calculateEntryPrice(perpPosition);
+console.log('Entry price:', entryPrice.toString());
+```
+
+**Parameters:**
+
+<ParamField path="userPosition" type="PerpPosition" required>
+  The user's perpetual position.
+</ParamField>
+
+**Returns:** BN - Average entry price in PRICE_PRECISION (1e6)
+
+### calculateCostBasis
+
+Calculates the cost basis of a position.
+
+```typescript
+import { calculateCostBasis } from '@drift-labs/sdk';
+
+const costBasis = calculateCostBasis(
+  perpPosition,
+  true // include settled PnL
+);
+```
+
+**Parameters:**
+
+<ParamField path="userPosition" type="PerpPosition" required>
+  The user's perpetual position.
+</ParamField>
+
+<ParamField path="includeSettledPnl" type="boolean" default="false">
+  Whether to include settled PnL in the calculation.
+</ParamField>
+
+**Returns:** BN - Cost basis in PRICE_PRECISION (1e10)
+
+## Position State Functions
+
+### findDirectionToClose
+
+Determines the direction needed to close a position.
+
+```typescript
+import { findDirectionToClose, PositionDirection } from '@drift-labs/sdk';
+
+const closeDirection = findDirectionToClose(perpPosition);
+// Returns PositionDirection.SHORT for long positions
+// Returns PositionDirection.LONG for short positions
+```
+
+**Parameters:**
+
+<ParamField path="userPosition" type="PerpPosition" required>
+  The user's perpetual position.
+</ParamField>
+
+**Returns:** PositionDirection - Direction to close the position
+
+### positionCurrentDirection
+
+Returns the current direction of a position.
+
+```typescript
+import { positionCurrentDirection } from '@drift-labs/sdk';
+
+const direction = positionCurrentDirection(perpPosition);
+```
+
+**Parameters:**
+
+<ParamField path="userPosition" type="PerpPosition" required>
+  The user's perpetual position.
+</ParamField>
+
+**Returns:** PositionDirection - Current position direction
+
+### positionIsAvailable
+
+Checks if a position slot is available (no position or orders).
+
+```typescript
+import { positionIsAvailable } from '@drift-labs/sdk';
+
+const isAvailable = positionIsAvailable(perpPosition);
+if (isAvailable) {
+  console.log('Position slot is available');
+}
+```
+
+**Parameters:**
+
+<ParamField path="position" type="PerpPosition" required>
+  The perpetual position to check.
+</ParamField>
+
+**Returns:** boolean - True if position slot is available
+
+### positionIsBeingLiquidated
+
+Checks if a position is currently being liquidated.
+
+```typescript
+import { positionIsBeingLiquidated } from '@drift-labs/sdk';
+
+const isLiquidating = positionIsBeingLiquidated(perpPosition);
+if (isLiquidating) {
+  console.log('Position is being liquidated!');
+}
+```
+
+**Parameters:**
+
+<ParamField path="position" type="PerpPosition" required>
+  The perpetual position to check.
+</ParamField>
+
+**Returns:** boolean - True if position has BeingLiquidated or Bankruptcy flag set
+
+### isEmptyPosition
+
+Checks if a position is empty (no base asset and no open orders).
+
+```typescript
+import { isEmptyPosition } from '@drift-labs/sdk';
+
+const isEmpty = isEmptyPosition(perpPosition);
+```
+
+**Parameters:**
+
+<ParamField path="userPosition" type="PerpPosition" required>
+  The user's perpetual position.
+</ParamField>
+
+**Returns:** boolean - True if position is empty
+
+### hasOpenOrders
+
+Checks if a position has any open orders.
+
+```typescript
+import { hasOpenOrders } from '@drift-labs/sdk';
+
+const hasOrders = hasOpenOrders(perpPosition);
+if (hasOrders) {
+  console.log('Position has open orders');
+}
+```
+
+**Parameters:**
+
+<ParamField path="position" type="PerpPosition" required>
+  The position to check.
+</ParamField>
+
+**Returns:** boolean - True if position has open orders
+
+## PerpPosition Type
+
+The PerpPosition type contains all data for a perpetual position:
+
+<ResponseField name="baseAssetAmount" type="BN">
+  Current base asset amount held (positive for long, negative for short).
+</ResponseField>
+
+<ResponseField name="lastCumulativeFundingRate" type="BN">
+  Last cumulative funding rate when position was updated.
+</ResponseField>
+
+<ResponseField name="marketIndex" type="number">
+  Index of the perpetual market.
+</ResponseField>
+
+<ResponseField name="quoteAssetAmount" type="BN">
+  Current quote asset amount (cost basis).
+</ResponseField>
+
+<ResponseField name="quoteEntryAmount" type="BN">
+  Quote amount at entry (before fees and funding).
+</ResponseField>
+
+<ResponseField name="quoteBreakEvenAmount" type="BN">
+  Quote amount including fees and funding (break-even point).
+</ResponseField>
+
+<ResponseField name="openOrders" type="number">
+  Number of open orders for this position.
+</ResponseField>
+
+<ResponseField name="openBids" type="BN">
+  Total size of open bid orders.
+</ResponseField>
+
+<ResponseField name="openAsks" type="BN">
+  Total size of open ask orders.
+</ResponseField>
+
+<ResponseField name="settledPnl" type="BN">
+  Settled PnL for this position.
+</ResponseField>
+
+<ResponseField name="lpShares" type="BN">
+  LP shares if user is providing liquidity.
+</ResponseField>
+
+<ResponseField name="maxMarginRatio" type="number">
+  Maximum margin ratio for this position.
+</ResponseField>
+
+<ResponseField name="lastQuoteAssetAmountPerLp" type="BN">
+  Last quote asset amount per LP share.
+</ResponseField>
+
+<ResponseField name="perLpBase" type="number">
+  Base asset per LP (i8).
+</ResponseField>
+
+<ResponseField name="positionFlag" type="number">
+  Position status flags.
+  
+  **PositionFlag values:**
+  - `PositionFlag.IsolatedPosition` (1) - Isolated margin position
+  - `PositionFlag.BeingLiquidated` (2) - Position is being liquidated
+  - `PositionFlag.Bankruptcy` (4) - Position is bankrupt
+</ResponseField>
+
+<ResponseField name="isolatedPositionScaledBalance" type="BN">
+  Scaled balance for isolated positions.
+</ResponseField>
+
+## Example: Position Dashboard
+
+```typescript
+import {
+  calculatePositionPNL,
+  calculateBreakEvenPrice,
+  calculateEntryPrice,
+  calculateUnsettledFundingPnl,
+  convertToNumber,
+  PRICE_PRECISION,
+  QUOTE_PRECISION,
+} from '@drift-labs/sdk';
+
+function displayPositionMetrics(
+  perpMarket: PerpMarketAccount,
+  position: PerpPosition,
+  oraclePriceData: OraclePriceData
+) {
+  const pnl = calculatePositionPNL(
+    perpMarket,
+    position,
+    true,
+    oraclePriceData
+  );
+  
+  const entryPrice = calculateEntryPrice(position);
+  const breakEvenPrice = calculateBreakEvenPrice(position);
+  const fundingPnl = calculateUnsettledFundingPnl(perpMarket, position);
+  
+  console.log('Position Metrics:');
+  console.log('  Entry Price:', convertToNumber(entryPrice, PRICE_PRECISION));
+  console.log('  Break-Even:', convertToNumber(breakEvenPrice, PRICE_PRECISION));
+  console.log('  Unrealized PnL:', convertToNumber(pnl, QUOTE_PRECISION));
+  console.log('  Funding PnL:', convertToNumber(fundingPnl, QUOTE_PRECISION));
+  console.log('  Position Size:', position.baseAssetAmount.toString());
+}
+```
+
+## See Also
+
+- [OrderParams](/api/trading/order-params) - Configure and place orders
+- [DLOB](/api/trading/dlob) - Decentralized Limit Order Book

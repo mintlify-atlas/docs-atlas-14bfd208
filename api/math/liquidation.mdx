@@ -1,0 +1,415 @@
+---
+title: "Liquidation Calculations"
+description: "Functions for calculating liquidation amounts, transfers, and liquidation timing"
+---
+
+The liquidation calculation utilities provide functions for determining how much of a position to liquidate, calculating asset and liability transfers during liquidations, and managing liquidation timing and percentages.
+
+## Base Asset Liquidation Functions
+
+### calculateBaseAssetAmountToCoverMarginShortage
+
+Calculates the amount of base asset that needs to be liquidated to cover a margin shortage.
+
+```typescript
+calculateBaseAssetAmountToCoverMarginShortage(
+  marginShortage: BN,
+  marginRatio: number,
+  liquidationFee: number,
+  ifLiquidationFee: number,
+  oraclePrice: BN,
+  quoteOraclePrice: BN
+): BN | undefined
+```
+
+<ParamField path="marginShortage" type="BN" required>
+  The margin shortage amount in QUOTE_PRECISION
+</ParamField>
+
+<ParamField path="marginRatio" type="number" required>
+  The margin ratio for the position
+</ParamField>
+
+<ParamField path="liquidationFee" type="number" required>
+  The liquidation fee in LIQUIDATION_FEE_PRECISION
+</ParamField>
+
+<ParamField path="ifLiquidationFee" type="number" required>
+  The insurance fund liquidation fee in LIQUIDATION_FEE_PRECISION
+</ParamField>
+
+<ParamField path="oraclePrice" type="BN" required>
+  The oracle price for the base asset
+</ParamField>
+
+<ParamField path="quoteOraclePrice" type="BN" required>
+  The oracle price for the quote asset
+</ParamField>
+
+<ResponseField name="return" type="BN | undefined">
+  Base asset amount to liquidate, or undefined if unlimited liquidation is allowed
+</ResponseField>
+
+#### Usage Example
+
+```typescript
+import { calculateBaseAssetAmountToCoverMarginShortage } from '@drift-labs/sdk';
+import { QUOTE_PRECISION } from '@drift-labs/sdk';
+
+const marginShortage = new BN(100).mul(QUOTE_PRECISION); // $100 shortage
+const marginRatio = 500; // 5% in MARGIN_PRECISION
+const liquidationFee = 500; // 0.5%
+const ifLiquidationFee = 100; // 0.1%
+const oraclePrice = new BN(50).mul(PRICE_PRECISION); // $50
+const quoteOraclePrice = PRICE_PRECISION; // $1
+
+const baseAmount = calculateBaseAssetAmountToCoverMarginShortage(
+  marginShortage,
+  marginRatio,
+  liquidationFee,
+  ifLiquidationFee,
+  oraclePrice,
+  quoteOraclePrice
+);
+
+if (baseAmount === undefined) {
+  console.log('Liquidate entire position');
+} else {
+  console.log('Liquidate base amount:', convertToNumber(baseAmount, BASE_PRECISION));
+}
+```
+
+## Spot Asset Liquidation Functions
+
+### calculateLiabilityTransferToCoverMarginShortage
+
+Calculates the amount of liability to transfer to cover a margin shortage in spot markets.
+
+```typescript
+calculateLiabilityTransferToCoverMarginShortage(
+  marginShortage: BN,
+  assetWeight: number,
+  assetLiquidationMultiplier: number,
+  liabilityWeight: number,
+  liabilityLiquidationMultiplier: number,
+  liabilityDecimals: number,
+  liabilityPrice: BN,
+  ifLiquidationFee: number
+): BN | undefined
+```
+
+<ParamField path="marginShortage" type="BN" required>
+  The margin shortage amount
+</ParamField>
+
+<ParamField path="assetWeight" type="number" required>
+  The asset weight in SPOT_MARKET_WEIGHT_PRECISION
+</ParamField>
+
+<ParamField path="assetLiquidationMultiplier" type="number" required>
+  The asset liquidation multiplier
+</ParamField>
+
+<ParamField path="liabilityWeight" type="number" required>
+  The liability weight in SPOT_MARKET_WEIGHT_PRECISION
+</ParamField>
+
+<ParamField path="liabilityLiquidationMultiplier" type="number" required>
+  The liability liquidation multiplier
+</ParamField>
+
+<ParamField path="liabilityDecimals" type="number" required>
+  The number of decimals for the liability asset
+</ParamField>
+
+<ParamField path="liabilityPrice" type="BN" required>
+  The oracle price for the liability asset
+</ParamField>
+
+<ParamField path="ifLiquidationFee" type="number" required>
+  The insurance fund liquidation fee
+</ParamField>
+
+<ResponseField name="return" type="BN | undefined">
+  Liability amount to transfer, or undefined if unlimited transfer is allowed
+</ResponseField>
+
+#### Usage Example
+
+```typescript
+import { calculateLiabilityTransferToCoverMarginShortage } from '@drift-labs/sdk';
+import { SPOT_MARKET_WEIGHT_PRECISION } from '@drift-labs/sdk';
+
+const marginShortage = new BN(50).mul(QUOTE_PRECISION);
+const assetWeight = 8000; // 0.8 in SPOT_MARKET_WEIGHT_PRECISION
+const assetLiquidationMultiplier = 10500; // 1.05
+const liabilityWeight = 12000; // 1.2
+const liabilityLiquidationMultiplier = 9500; // 0.95
+const liabilityDecimals = 6;
+const liabilityPrice = PRICE_PRECISION;
+const ifLiquidationFee = 100;
+
+const liabilityTransfer = calculateLiabilityTransferToCoverMarginShortage(
+  marginShortage,
+  assetWeight,
+  assetLiquidationMultiplier,
+  liabilityWeight,
+  liabilityLiquidationMultiplier,
+  liabilityDecimals,
+  liabilityPrice,
+  ifLiquidationFee
+);
+```
+
+### calculateAssetTransferForLiabilityTransfer
+
+Calculates the asset transfer amount for a given liability transfer during liquidation.
+
+```typescript
+calculateAssetTransferForLiabilityTransfer(
+  assetAmount: BN,
+  assetLiquidationMultiplier: number,
+  assetDecimals: number,
+  assetPrice: BN,
+  liabilityAmount: BN,
+  liabilityLiquidationMultiplier: number,
+  liabilityDecimals: number,
+  liabilityPrice: BN
+): BN | undefined
+```
+
+<ParamField path="assetAmount" type="BN" required>
+  Available asset amount
+</ParamField>
+
+<ParamField path="assetLiquidationMultiplier" type="number" required>
+  The asset liquidation multiplier
+</ParamField>
+
+<ParamField path="assetDecimals" type="number" required>
+  The number of decimals for the asset
+</ParamField>
+
+<ParamField path="assetPrice" type="BN" required>
+  The oracle price for the asset
+</ParamField>
+
+<ParamField path="liabilityAmount" type="BN" required>
+  The liability amount to transfer
+</ParamField>
+
+<ParamField path="liabilityLiquidationMultiplier" type="number" required>
+  The liability liquidation multiplier
+</ParamField>
+
+<ParamField path="liabilityDecimals" type="number" required>
+  The number of decimals for the liability
+</ParamField>
+
+<ParamField path="liabilityPrice" type="BN" required>
+  The oracle price for the liability
+</ParamField>
+
+<ResponseField name="return" type="BN | undefined">
+  Asset transfer amount. Rounds to available asset amount if the difference is less than $1
+</ResponseField>
+
+#### Usage Example
+
+```typescript
+import { calculateAssetTransferForLiabilityTransfer } from '@drift-labs/sdk';
+
+const assetAmount = new BN(1000).mul(new BN(10).pow(new BN(6))); // 1000 USDC
+const assetLiquidationMultiplier = 10500;
+const assetDecimals = 6;
+const assetPrice = PRICE_PRECISION;
+const liabilityAmount = new BN(500).mul(new BN(10).pow(new BN(9))); // 500 tokens
+const liabilityLiquidationMultiplier = 9500;
+const liabilityDecimals = 9;
+const liabilityPrice = new BN(2).mul(PRICE_PRECISION); // $2
+
+const assetTransfer = calculateAssetTransferForLiabilityTransfer(
+  assetAmount,
+  assetLiquidationMultiplier,
+  assetDecimals,
+  assetPrice,
+  liabilityAmount,
+  liabilityLiquidationMultiplier,
+  liabilityDecimals,
+  liabilityPrice
+);
+
+if (assetTransfer) {
+  console.log('Asset transfer:', convertToNumber(assetTransfer, new BN(10).pow(new BN(assetDecimals))));
+}
+```
+
+## Liquidation Timing Functions
+
+### calculateMaxPctToLiquidate
+
+Calculates the maximum percentage of a position that can be liquidated based on time elapsed and margin status.
+
+```typescript
+calculateMaxPctToLiquidate(
+  userLastActiveSlot: BN,
+  userLiquidationMarginFreed: BN,
+  marginShortage: BN,
+  slot: BN,
+  initialPctToLiquidate: BN,
+  liquidationDuration: BN
+): BN
+```
+
+<ParamField path="userLastActiveSlot" type="BN" required>
+  The slot when the user was last active/liquidated
+</ParamField>
+
+<ParamField path="userLiquidationMarginFreed" type="BN" required>
+  The amount of margin already freed through liquidation
+</ParamField>
+
+<ParamField path="marginShortage" type="BN" required>
+  The current margin shortage
+</ParamField>
+
+<ParamField path="slot" type="BN" required>
+  The current slot
+</ParamField>
+
+<ParamField path="initialPctToLiquidate" type="BN" required>
+  The initial percentage allowed to liquidate in LIQUIDATION_PCT_PRECISION
+</ParamField>
+
+<ParamField path="liquidationDuration" type="BN" required>
+  The duration over which liquidation percentage increases (in slots)
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  Maximum percentage to liquidate in LIQUIDATION_PCT_PRECISION
+</ResponseField>
+
+#### Usage Example
+
+```typescript
+import { calculateMaxPctToLiquidate } from '@drift-labs/sdk';
+import { LIQUIDATION_PCT_PRECISION } from '@drift-labs/sdk';
+
+const userLastActiveSlot = new BN(100000);
+const userLiquidationMarginFreed = new BN(0);
+const marginShortage = new BN(100).mul(QUOTE_PRECISION);
+const currentSlot = new BN(100150); // 150 slots later
+const initialPctToLiquidate = LIQUIDATION_PCT_PRECISION.div(new BN(10)); // 10%
+const liquidationDuration = new BN(150); // ~1 minute at 400ms per slot
+
+const maxPct = calculateMaxPctToLiquidate(
+  userLastActiveSlot,
+  userLiquidationMarginFreed,
+  marginShortage,
+  currentSlot,
+  initialPctToLiquidate,
+  liquidationDuration
+);
+
+const maxPctNumber = maxPct.mul(new BN(100)).div(LIQUIDATION_PCT_PRECISION).toNumber();
+console.log(`Can liquidate up to ${maxPctNumber}% of position`);
+```
+
+#### Implementation Details
+
+This function implements a progressive liquidation mechanism:
+- Small margin shortages (< $50) allow immediate full liquidation
+- Larger positions liquidate progressively over time
+- The percentage allowed increases linearly from `initialPctToLiquidate` to 100% over `liquidationDuration` slots
+- Accounts for margin already freed in previous liquidation attempts
+
+## Margin Shortage Functions
+
+### getMarginShortage
+
+Calculates the margin shortage for an account.
+
+```typescript
+getMarginShortage(
+  maintenanceMarginRequirementPlusBuffer: BN,
+  maintenanceTotalCollateral: BN
+): BN
+```
+
+<ParamField path="maintenanceMarginRequirementPlusBuffer" type="BN" required>
+  The maintenance margin requirement plus any buffer
+</ParamField>
+
+<ParamField path="maintenanceTotalCollateral" type="BN" required>
+  The total maintenance collateral
+</ParamField>
+
+<ResponseField name="return" type="BN">
+  The absolute margin shortage amount
+</ResponseField>
+
+#### Usage Example
+
+```typescript
+import { getMarginShortage } from '@drift-labs/sdk';
+
+const maintenanceMargin = new BN(150).mul(QUOTE_PRECISION); // $150 required
+const totalCollateral = new BN(100).mul(QUOTE_PRECISION); // $100 available
+
+const shortage = getMarginShortage(maintenanceMargin, totalCollateral);
+console.log('Margin shortage:', convertToNumber(shortage, QUOTE_PRECISION), 'USD');
+```
+
+## Precision Constants
+
+The liquidation functions use various precision constants:
+
+```typescript
+import {
+  LIQUIDATION_FEE_PRECISION,      // 10^6 - for liquidation fees
+  LIQUIDATION_PCT_PRECISION,       // 10^6 - for liquidation percentages
+  MARGIN_PRECISION,                // 10^4 - for margin ratios
+  PRICE_PRECISION,                 // 10^6 - for prices
+  QUOTE_PRECISION,                 // 10^6 - for quote amounts
+  SPOT_MARKET_WEIGHT_PRECISION,    // 10^4 - for spot market weights
+} from '@drift-labs/sdk';
+```
+
+## Liquidation Process Overview
+
+The liquidation process typically follows these steps:
+
+1. **Determine margin shortage** using `getMarginShortage`
+2. **Calculate max liquidation percentage** using `calculateMaxPctToLiquidate`
+3. **For perp positions**: Calculate base asset amount to liquidate using `calculateBaseAssetAmountToCoverMarginShortage`
+4. **For spot positions**: 
+   - Calculate liability transfer using `calculateLiabilityTransferToCoverMarginShortage`
+   - Calculate corresponding asset transfer using `calculateAssetTransferForLiabilityTransfer`
+5. **Execute liquidation** through the Drift Protocol
+
+```typescript
+// Example: Check if position can be liquidated
+import { getMarginShortage, calculateMaxPctToLiquidate } from '@drift-labs/sdk';
+
+const user = driftClient.getUser();
+const marginRequirement = user.getMaintenanceMarginRequirement();
+const totalCollateral = user.getTotalCollateral();
+
+const shortage = getMarginShortage(marginRequirement, totalCollateral);
+
+if (shortage.gt(new BN(0))) {
+  console.log('Position is liquidatable');
+  console.log('Margin shortage:', convertToNumber(shortage, QUOTE_PRECISION));
+  
+  const maxPct = calculateMaxPctToLiquidate(
+    user.lastActiveSlot,
+    user.liquidationMarginFreed,
+    shortage,
+    currentSlot,
+    initialPct,
+    duration
+  );
+  
+  console.log('Max % to liquidate:', maxPct.mul(new BN(100)).div(LIQUIDATION_PCT_PRECISION).toNumber());
+}
+```

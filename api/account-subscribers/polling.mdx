@@ -1,0 +1,497 @@
+---
+title: Polling Subscribers
+description: Efficient batch account updates using polling mechanisms
+---
+
+Polling subscribers use periodic RPC calls to fetch account data in batches. They are ideal for scenarios where WebSocket connections are unreliable or rate limits are a concern.
+
+## BulkAccountLoader
+
+The `BulkAccountLoader` is the core mechanism for polling-based subscriptions. It efficiently batches multiple account requests into single RPC calls.
+
+### Constructor
+
+```typescript
+new BulkAccountLoader(
+  connection: Connection,
+  commitment: Commitment,
+  pollingFrequency: number
+)
+```
+
+<ParamField path="connection" type="Connection" required>
+  Solana connection instance
+</ParamField>
+
+<ParamField path="commitment" type="Commitment" required>
+  Commitment level for account fetches (e.g., 'confirmed', 'finalized')
+</ParamField>
+
+<ParamField path="pollingFrequency" type="number" required>
+  Polling interval in milliseconds (e.g., 1000 for 1 second)
+</ParamField>
+
+### Methods
+
+#### addAccount
+
+Add an account to the polling set.
+
+```typescript
+const callbackId = await accountLoader.addAccount(
+  publicKey: PublicKey,
+  callback: (buffer: Buffer, slot: number) => void
+): Promise<string>
+```
+
+<ParamField path="publicKey" type="PublicKey" required>
+  Public key of the account to poll
+</ParamField>
+
+<ParamField path="callback" type="(buffer: Buffer, slot: number) => void" required>
+  Callback function invoked when account data updates
+</ParamField>
+
+**Returns:** Callback ID for later removal
+
+#### removeAccount
+
+Remove an account from the polling set.
+
+```typescript
+accountLoader.removeAccount(publicKey: PublicKey, callbackId: string): void
+```
+
+#### load
+
+Manually trigger a load of all accounts.
+
+```typescript
+await accountLoader.load(): Promise<void>
+```
+
+#### updatePollingFrequency
+
+Change the polling frequency.
+
+```typescript
+accountLoader.updatePollingFrequency(pollingFrequency: number): void
+```
+
+<ParamField path="pollingFrequency" type="number" required>
+  New polling interval in milliseconds
+</ParamField>
+
+### Example Usage
+
+```typescript
+import { BulkAccountLoader } from '@drift-labs/sdk';
+import { Connection, PublicKey } from '@solana/web3.js';
+
+const connection = new Connection('https://api.mainnet-beta.solana.com');
+
+// Create bulk account loader with 1 second polling
+const accountLoader = new BulkAccountLoader(
+  connection,
+  'confirmed',
+  1000 // Poll every 1 second
+);
+
+// Add accounts to poll
+const userPubkey = new PublicKey('...');
+const callbackId = await accountLoader.addAccount(
+  userPubkey,
+  (buffer, slot) => {
+    if (buffer) {
+      console.log('Account updated at slot', slot);
+      // Decode buffer as needed
+    }
+  }
+);
+
+// Manually trigger load
+await accountLoader.load();
+
+// Update polling frequency to 5 seconds
+accountLoader.updatePollingFrequency(5000);
+
+// Remove account
+accountLoader.removeAccount(userPubkey, callbackId);
+```
+
+## PollingUserAccountSubscriber
+
+Poll-based subscriber for user accounts.
+
+### Constructor
+
+```typescript
+new PollingUserAccountSubscriber(
+  connection: Connection,
+  userAccountPublicKey: PublicKey,
+  accountLoader: BulkAccountLoader,
+  decode: (name: string, buffer: Buffer) => UserAccount
+)
+```
+
+<ParamField path="connection" type="Connection" required>
+  Solana connection instance
+</ParamField>
+
+<ParamField path="userAccountPublicKey" type="PublicKey" required>
+  Public key of the user account to subscribe to
+</ParamField>
+
+<ParamField path="accountLoader" type="BulkAccountLoader" required>
+  Shared bulk account loader instance
+</ParamField>
+
+<ParamField path="decode" type="(name: string, buffer: Buffer) => UserAccount" required>
+  Function to decode account buffer into UserAccount
+</ParamField>
+
+### Methods
+
+#### subscribe
+
+Start polling the user account.
+
+```typescript
+await subscriber.subscribe(userAccount?: UserAccount): Promise<boolean>
+```
+
+<ParamField path="userAccount" type="UserAccount">
+  Optional initial user account data
+</ParamField>
+
+#### getUserAccountAndSlot
+
+Get the current user account data.
+
+```typescript
+const { data, slot } = subscriber.getUserAccountAndSlot();
+```
+
+**Returns:** `DataAndSlot<UserAccount>`
+
+**Throws:** `NotSubscribedError` if account hasn't been fetched
+
+#### updateData
+
+Manually update the user account data.
+
+```typescript
+subscriber.updateData(userAccount: UserAccount, slot: number): void
+```
+
+### Example Usage
+
+```typescript
+import { PollingUserAccountSubscriber, BulkAccountLoader } from '@drift-labs/sdk';
+import { Connection, PublicKey } from '@solana/web3.js';
+import { Program } from '@coral-xyz/anchor';
+
+const connection = new Connection('https://api.mainnet-beta.solana.com');
+
+// Create shared account loader
+const accountLoader = new BulkAccountLoader(
+  connection,
+  'confirmed',
+  1000
+);
+
+// Create decode function
+const decode = (name: string, buffer: Buffer) => {
+  return program.account[name.toLowerCase()].coder.accounts.decode(name, buffer);
+};
+
+// Create polling subscriber
+const userPubkey = new PublicKey('...');
+const subscriber = new PollingUserAccountSubscriber(
+  connection,
+  userPubkey,
+  accountLoader,
+  decode
+);
+
+// Listen for updates
+subscriber.eventEmitter.on('userAccountUpdate', (userAccount) => {
+  console.log('User account updated:', userAccount);
+  console.log('Free collateral:', userAccount.freeCollateral);
+});
+
+subscriber.eventEmitter.on('error', (error) => {
+  console.error('Polling error:', error);
+});
+
+// Subscribe
+await subscriber.subscribe();
+
+// Get current data
+const { data: userAccount, slot } = subscriber.getUserAccountAndSlot();
+console.log('Current user account at slot', slot);
+
+// Cleanup
+await subscriber.unsubscribe();
+```
+
+## PollingDriftClientAccountSubscriber
+
+Poll-based subscriber for Drift protocol accounts (state, markets, oracles).
+
+### Constructor
+
+```typescript
+new PollingDriftClientAccountSubscriber(
+  program: Program,
+  accountLoader: BulkAccountLoader,
+  perpMarketIndexes: number[],
+  spotMarketIndexes: number[],
+  oracleInfos: OracleInfo[],
+  shouldFindAllMarketsAndOracles: boolean,
+  delistedMarketSetting: DelistedMarketSetting
+)
+```
+
+<ParamField path="program" type="Program" required>
+  Anchor program instance for the Drift protocol
+</ParamField>
+
+<ParamField path="accountLoader" type="BulkAccountLoader" required>
+  Shared bulk account loader instance
+</ParamField>
+
+<ParamField path="perpMarketIndexes" type="number[]" required>
+  Array of perpetual market indexes to poll
+</ParamField>
+
+<ParamField path="spotMarketIndexes" type="number[]" required>
+  Array of spot market indexes to poll
+</ParamField>
+
+<ParamField path="oracleInfos" type="OracleInfo[]" required>
+  Array of oracle information to poll
+</ParamField>
+
+<ParamField path="shouldFindAllMarketsAndOracles" type="boolean" required>
+  Whether to automatically discover and poll all markets
+</ParamField>
+
+<ParamField path="delistedMarketSetting" type="DelistedMarketSetting" required>
+  How to handle delisted markets: `Unsubscribe`, `Subscribe`, or `Discard`
+</ParamField>
+
+### Methods
+
+#### subscribe
+
+Start polling all configured accounts.
+
+```typescript
+await subscriber.subscribe(): Promise<boolean>
+```
+
+#### addPerpMarket
+
+Dynamically add a perpetual market to poll.
+
+```typescript
+await subscriber.addPerpMarket(marketIndex: number): Promise<boolean>
+```
+
+#### addSpotMarket
+
+Dynamically add a spot market to poll.
+
+```typescript
+await subscriber.addSpotMarket(marketIndex: number): Promise<boolean>
+```
+
+#### addOracle
+
+Dynamically add an oracle to poll.
+
+```typescript
+await subscriber.addOracle(oracleInfo: OracleInfo): Promise<boolean>
+```
+
+#### updateAccountLoaderPollingFrequency
+
+Update the polling frequency.
+
+```typescript
+subscriber.updateAccountLoaderPollingFrequency(pollingFrequency: number): void
+```
+
+<ParamField path="pollingFrequency" type="number" required>
+  New polling interval in milliseconds
+</ParamField>
+
+### Example Usage
+
+```typescript
+import { 
+  PollingDriftClientAccountSubscriber,
+  BulkAccountLoader,
+  DelistedMarketSetting 
+} from '@drift-labs/sdk';
+
+const connection = new Connection('https://api.mainnet-beta.solana.com');
+
+// Create shared account loader
+const accountLoader = new BulkAccountLoader(
+  connection,
+  'confirmed',
+  2000 // Poll every 2 seconds
+);
+
+// Create polling subscriber for all markets
+const driftSubscriber = new PollingDriftClientAccountSubscriber(
+  program,
+  accountLoader,
+  [], // perpMarketIndexes - will be auto-discovered
+  [], // spotMarketIndexes - will be auto-discovered  
+  [], // oracleInfos - will be auto-discovered
+  true, // shouldFindAllMarketsAndOracles
+  DelistedMarketSetting.Discard
+);
+
+// Listen for events
+driftSubscriber.eventEmitter.on('stateAccountUpdate', (state) => {
+  console.log('State updated:', state);
+});
+
+driftSubscriber.eventEmitter.on('perpMarketAccountUpdate', (market) => {
+  console.log('Perp market updated:', market.marketIndex);
+});
+
+driftSubscriber.eventEmitter.on('oraclePriceUpdate', (pubkey, source, data) => {
+  console.log('Oracle price:', data.price.toString());
+});
+
+// Subscribe to all accounts
+await driftSubscriber.subscribe();
+
+// Get state account
+const { data: state } = driftSubscriber.getStateAccountAndSlot();
+console.log('Min perp auction duration:', state.minPerpAuctionDuration);
+
+// Get specific market
+const btcPerpMarket = driftSubscriber.getMarketAccountAndSlot(1);
+if (btcPerpMarket) {
+  console.log('BTC-PERP market:', btcPerpMarket.data);
+}
+
+// Adjust polling frequency to 5 seconds
+driftSubscriber.updateAccountLoaderPollingFrequency(5000);
+
+// Cleanup
+await driftSubscriber.unsubscribe();
+```
+
+## Other Polling Subscribers
+
+The SDK provides polling subscribers for other account types:
+
+### PollingTokenAccountSubscriber
+
+Poll SPL token account updates:
+
+```typescript
+import { PollingTokenAccountSubscriber } from '@drift-labs/sdk';
+
+const tokenSubscriber = new PollingTokenAccountSubscriber(
+  connection,
+  tokenAccountPublicKey,
+  accountLoader
+);
+
+await tokenSubscriber.subscribe();
+const { data: tokenAccount } = tokenSubscriber.getTokenAccountAndSlot();
+```
+
+### PollingOracleAccountSubscriber
+
+Poll oracle account updates:
+
+```typescript
+import { PollingOracleAccountSubscriber } from '@drift-labs/sdk';
+
+const oracleSubscriber = new PollingOracleAccountSubscriber(
+  connection,
+  oraclePublicKey,
+  oracleSource,
+  accountLoader,
+  program
+);
+
+await oracleSubscriber.subscribe();
+const { data: oracleData } = oracleSubscriber.getOraclePriceData();
+```
+
+## Performance Considerations
+
+### Polling Frequency
+
+Choose polling frequency based on your needs:
+
+- **High frequency (500-1000ms)**: Real-time trading, liquidations
+- **Medium frequency (2000-5000ms)**: Portfolio monitoring, dashboards
+- **Low frequency (10000+ms)**: Background tasks, analytics
+
+### Batch Efficiency
+
+The `BulkAccountLoader` automatically batches requests:
+
+- Uses `getMultipleAccounts` for efficiency
+- Chunks requests to avoid RPC limits (100 accounts per request)
+- Processes chunks in parallel (10 chunks at a time)
+- Shares a single loader across multiple subscribers
+
+### Rate Limiting
+
+To avoid rate limits:
+
+```typescript
+// Use a shared account loader
+const accountLoader = new BulkAccountLoader(connection, 'confirmed', 2000);
+
+// Share across multiple subscribers
+const userSubscriber = new PollingUserAccountSubscriber(
+  connection,
+  userPubkey,
+  accountLoader,
+  decode
+);
+
+const driftSubscriber = new PollingDriftClientAccountSubscriber(
+  program,
+  accountLoader,
+  [], [], [], true,
+  DelistedMarketSetting.Discard
+);
+
+// Both subscribers share the same polling cycle
+```
+
+## Best Practices
+
+1. **Share account loaders** - Use a single `BulkAccountLoader` instance across multiple subscribers
+2. **Choose appropriate polling frequency** - Balance between latency and RPC usage
+3. **Handle errors** - Listen to error events and implement retry logic
+4. **Monitor slot numbers** - Check slot numbers to detect stale data
+5. **Clean up properly** - Unsubscribe to stop polling and free resources
+
+## Advantages Over WebSocket
+
+- **More reliable** - Less affected by network issues
+- **Rate limit friendly** - Batches multiple accounts in single requests
+- **Predictable resource usage** - Fixed polling interval
+- **Easier to debug** - Simple request/response model
+- **Better for batch operations** - Efficient when monitoring many accounts
+
+## Disadvantages
+
+- **Higher latency** - Updates only arrive at polling intervals
+- **More RPC calls** - Regular polling even when data unchanged
+- **Resource usage** - Continuous polling consumes RPC quota
